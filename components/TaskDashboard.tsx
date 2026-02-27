@@ -1,82 +1,191 @@
 // ai-task-dashboard/components/TaskDashboard.tsx
 'use client';
 
-import { useActionState, useOptimistic } from 'react';
-import { createTaskAction } from '@/app/actions';
+import { useActionState, useOptimistic, useState } from 'react';
+import { createTaskAction, deleteTaskAction, updateTaskAction } from '@/app/actions';
 
-export type Task = { id: string; title: string; status: 'Pending' | 'Completed' };
+export type Task = { 
+  id: string; 
+  title: string; 
+  status: string; 
+  image_url?: string; 
+  scheduled_at?: string; 
+  is_sent: boolean 
+};
 
 export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }) {
   const [state, formAction, isPending] = useActionState(createTaskAction, { success: true });
-  
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
     initialTasks,
     (state, newTask: Task) => [newTask, ...state]
   );
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#020617] p-6 text-slate-200 font-sans">
-      <div className="max-w-2xl mx-auto">
-        {/* Header Section */}
-        <header className="mb-10 p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl">
-          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-br from-blue-400 via-indigo-400 to-emerald-400 bg-clip-text text-transparent">
-            Task Command
+    <div className="min-h-screen bg-[#020617] text-slate-200 p-4 md:p-10 font-sans selection:bg-blue-500/30">
+      <div className="max-w-3xl mx-auto">
+        
+        {/* Header */}
+        <header className="mb-12 text-center">
+          <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400 bg-clip-text text-transparent italic">
+            AI COMMAND
           </h1>
-          <p className="text-slate-500 mt-2 font-medium">Real-time Dashboard & Telegram Sync</p>
+          <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs mt-2">Mission Control & Telegram Sync</p>
         </header>
 
-        {/* Action Form */}
-        <form 
-          action={async (formData) => {
+        {/* Create Task Panel */}
+        <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-6 mb-10 backdrop-blur-xl shadow-inner">
+          <form action={async (formData) => {
             const title = formData.get('title') as string;
             if (!title) return;
-            addOptimisticTask({ id: Math.random().toString(), title, status: 'Pending' });
+            // 樂觀更新
+            addOptimisticTask({ 
+              id: Math.random().toString(), 
+              title, 
+              status: 'Pending', 
+              is_sent: formData.get('scheduled_at') ? false : true 
+            });
             await formAction(formData);
-          }} 
-          className="flex gap-3 mb-10 group"
-        >
-          <input
-            name="title"
-            autoComplete="off"
-            placeholder="Assign new objective..."
-            className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-white/10 transition-all placeholder:text-slate-600"
-            required
-          />
-          <button
-            type="submit"
-            disabled={isPending}
-            className="bg-blue-600 hover:bg-blue-500 active:scale-95 px-8 py-4 rounded-2xl font-bold text-white shadow-lg shadow-blue-900/20 transition-all disabled:opacity-50 disabled:scale-100 flex items-center gap-2"
-          >
-            {isPending ? (
-              <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-            ) : 'Deploy'}
-          </button>
-        </form>
+            setImagePreview(null);
+            (document.getElementById('task-form') as HTMLFormElement).reset();
+          }} id="task-form" className="space-y-4">
+            
+            <div className="flex gap-3">
+              <input
+                name="title"
+                placeholder="Assign a new objective..."
+                className="flex-1 bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all placeholder:text-slate-700"
+                required
+              />
+              <button
+                type="submit"
+                disabled={isPending}
+                className="bg-blue-600 hover:bg-blue-500 active:scale-95 px-8 rounded-2xl font-black text-white shadow-xl shadow-blue-900/40 disabled:opacity-50 transition-all"
+              >
+                {isPending ? '...' : 'DEPLOY'}
+              </button>
+            </div>
 
-        {/* List Section */}
-        <div className="space-y-3">
-          {optimisticTasks.length === 0 && (
-            <p className="text-center py-12 text-slate-600 italic">No tasks active.</p>
-          )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Image Upload */}
+              <div className="relative group cursor-pointer bg-black/20 border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-white/20 transition-all">
+                <input type="file" name="image" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageChange} />
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                  {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover rounded-xl" /> : '🖼️'}
+                </div>
+                <span className="text-sm font-semibold text-slate-400">{imagePreview ? 'Image Attached' : 'Attach Visual'}</span>
+              </div>
+
+              {/* Schedule */}
+              <div className="bg-black/20 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                <div className="text-emerald-400">⏰</div>
+                <input 
+                  type="datetime-local" 
+                  name="scheduled_at" 
+                  className="bg-transparent border-none outline-none text-sm text-slate-400 font-mono w-full"
+                />
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Task List */}
+        <div className="space-y-4">
           {optimisticTasks.map((task) => (
             <div 
-              key={task.id} 
-              className="group p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all duration-300 flex justify-between items-center shadow-sm"
+              key={task.id}
+              onClick={() => setEditingTask(task)}
+              className="group cursor-pointer bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05] hover:border-white/10 p-5 rounded-[2rem] flex items-center justify-between transition-all duration-500 shadow-sm"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
-                <span className="text-lg font-medium tracking-wide text-slate-300 group-hover:text-white transition-colors">
-                  {task.title}
-                </span>
+              <div className="flex items-center gap-5">
+                {task.image_url ? (
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+                    <img src={task.image_url} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-center text-xl grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all">
+                    📋
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-bold text-lg tracking-tight text-slate-300 group-hover:text-white transition-colors">{task.title}</h3>
+                  <div className="flex gap-3 mt-1">
+                    <span className="text-[10px] font-black tracking-widest text-blue-500 uppercase">{task.status}</span>
+                    {task.scheduled_at && (
+                      <span className="text-[10px] font-black tracking-widest text-emerald-500 uppercase">
+                        Scheduled: {new Date(task.scheduled_at).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] uppercase tracking-widest font-bold px-3 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  {task.status}
-                </span>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-4">
+                <span className="text-slate-600 font-black text-xl">→</span>
               </div>
             </div>
           ))}
         </div>
+
+        {/* Modal: Task Details & Editing */}
+        {editingTask && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[3rem] p-8 shadow-2xl relative">
+              <button 
+                onClick={() => setEditingTask(null)}
+                className="absolute top-6 right-8 text-slate-500 hover:text-white font-bold text-2xl"
+              >✕</button>
+              
+              <h2 className="text-2xl font-black mb-6 text-white italic">TASK DETAILS</h2>
+              
+              {editingTask.image_url && (
+                <div className="w-full h-48 rounded-[2rem] overflow-hidden mb-6 border border-white/10">
+                  <img src={editingTask.image_url} className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 tracking-widest block mb-2 uppercase">Objective Title</label>
+                  <input 
+                    defaultValue={editingTask.title}
+                    id="edit-title"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    onClick={async () => {
+                      const newTitle = (document.getElementById('edit-title') as HTMLInputElement).value;
+                      await updateTaskAction(editingTask.id, newTitle, editingTask.status);
+                      setEditingTask(null);
+                    }}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold shadow-lg shadow-indigo-900/30"
+                  >SAVE CHANGES</button>
+                  <button 
+                    onClick={async () => {
+                      await deleteTaskAction(editingTask.id);
+                      setEditingTask(null);
+                    }}
+                    className="bg-red-500/10 hover:bg-red-500/20 text-red-500 px-6 py-4 rounded-2xl font-bold border border-red-500/20"
+                  >TERMINATE</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
