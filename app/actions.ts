@@ -8,24 +8,24 @@ import { revalidatePath } from 'next/cache';
 
 export async function createTaskAction(prevState: any, formData: FormData) {
   const title = formData.get('title') as string;
+  const description = formData.get('description') as string; // 新增長描述
   const scheduledAt = formData.get('scheduled_at') as string;
-  const imageFile = formData.get('image') as any; // 使用 any 避免 File 型別在 Serverless 環境下的編譯警告
+  const imageFile = formData.get('image') as any;
 
   try {
     let imageUrl = '';
-    // 檢查檔案是否存在且具備 size 屬性
     if (imageFile && typeof imageFile === 'object' && 'size' in imageFile && imageFile.size > 0) {
       const blob = await put(imageFile.name, imageFile, { access: 'public' });
       imageUrl = blob.url;
     }
 
     await sql`
-      INSERT INTO tasks (title, image_url, scheduled_at, is_sent)
-      VALUES (${title}, ${imageUrl}, ${scheduledAt || null}, ${scheduledAt ? false : true})
+      INSERT INTO tasks (title, description, image_url, scheduled_at, is_sent)
+      VALUES (${title}, ${description || ''}, ${imageUrl}, ${scheduledAt || null}, ${scheduledAt ? false : true})
     `;
 
     if (!scheduledAt) {
-      const message = `🚀 *New Immediate Task*\n\n📌 Title: ${title}${imageUrl ? `\n🖼 Image: [View](${imageUrl})` : ''}`;
+      const message = `🚀 *New Task*\n\n📌 *${title}*\n${description ? `📝 ${description.substring(0, 100)}...\n` : ''}${imageUrl ? `\n🖼 [View Attachment](${imageUrl})` : ''}`;
       await sendTelegramNotification(message);
     }
 
@@ -47,9 +47,9 @@ export async function deleteTaskAction(id: string) {
   }
 }
 
-export async function updateTaskAction(id: string, title: string, status: string) {
+export async function updateTaskAction(id: string, title: string, description: string, status: string) {
   try {
-    await sql`UPDATE tasks SET title = ${title}, status = ${status} WHERE id = ${id}`;
+    await sql`UPDATE tasks SET title = ${title}, description = ${description}, status = ${status} WHERE id = ${id}`;
     revalidatePath('/');
     return { success: true };
   } catch (error) {

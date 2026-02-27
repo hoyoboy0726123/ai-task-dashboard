@@ -1,12 +1,21 @@
 // ai-task-dashboard/components/TaskDashboard.tsx
 'use client';
 
-import { useActionState, useOptimistic, useState } from 'react';
+import { useActionState, useOptimistic, useState, useEffect } from 'react';
 import { createTaskAction, deleteTaskAction, updateTaskAction } from '@/app/actions';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Send, Image as ImageIcon, Clock, Trash2, 
+  ChevronRight, X, ExternalLink, LayoutGrid, 
+  Activity, CheckCircle2, AlertCircle 
+} from 'lucide-react';
 
 export type Task = { 
   id: string; 
   title: string; 
+  description?: string;
   status: string; 
   image_url?: string; 
   scheduled_at?: string; 
@@ -16,6 +25,7 @@ export type Task = {
 export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }) {
   const [state, formAction, isPending] = useActionState(createTaskAction, { success: true });
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
@@ -33,160 +43,258 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 p-4 md:p-10 font-sans selection:bg-blue-500/30">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-cyan-500/30 overflow-x-hidden">
+      
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/30 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/20 blur-[120px] rounded-full" />
+      </div>
+
+      <div className="max-w-6xl mx-auto p-6 md:p-12 relative z-10">
         
-        {/* Header */}
-        <header className="mb-12 text-center">
-          <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400 bg-clip-text text-transparent italic">
-            AI COMMAND
-          </h1>
-          <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs mt-2">Mission Control & Telegram Sync</p>
-        </header>
-
-        {/* Create Task Panel */}
-        <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-6 mb-10 backdrop-blur-xl shadow-inner">
-          <form action={async (formData) => {
-            const title = formData.get('title') as string;
-            if (!title) return;
-            // 樂觀更新
-            addOptimisticTask({ 
-              id: Math.random().toString(), 
-              title, 
-              status: 'Pending', 
-              is_sent: formData.get('scheduled_at') ? false : true 
-            });
-            await formAction(formData);
-            setImagePreview(null);
-            (document.getElementById('task-form') as HTMLFormElement).reset();
-          }} id="task-form" className="space-y-4">
-            
-            <div className="flex gap-3">
-              <input
-                name="title"
-                placeholder="Assign a new objective..."
-                className="flex-1 bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all placeholder:text-slate-700"
-                required
-              />
-              <button
-                type="submit"
-                disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-500 active:scale-95 px-8 rounded-2xl font-black text-white shadow-xl shadow-blue-900/40 disabled:opacity-50 transition-all"
-              >
-                {isPending ? '...' : 'DEPLOY'}
-              </button>
+        {/* Header Section */}
+        <motion.header 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row justify-between items-center mb-16 gap-6"
+        >
+          <div className="text-center md:text-left">
+            <h1 className="text-6xl font-black tracking-tighter bg-gradient-to-r from-white via-slate-200 to-slate-500 bg-clip-text text-transparent italic">
+              AI COMMAND
+            </h1>
+            <div className="flex items-center gap-3 mt-2 justify-center md:justify-start">
+              <span className="h-[1px] w-8 bg-blue-500"></span>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400">Tactical Control Center</p>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Image Upload */}
-              <div className="relative group cursor-pointer bg-black/20 border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-white/20 transition-all">
-                <input type="file" name="image" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageChange} />
-                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                  {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover rounded-xl" /> : '🖼️'}
-                </div>
-                <span className="text-sm font-semibold text-slate-400">{imagePreview ? 'Image Attached' : 'Attach Visual'}</span>
-              </div>
-
-              {/* Schedule */}
-              <div className="bg-black/20 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
-                <div className="text-emerald-400">⏰</div>
-                <input 
-                  type="datetime-local" 
-                  name="scheduled_at" 
-                  className="bg-transparent border-none outline-none text-sm text-slate-400 font-mono w-full"
-                />
-              </div>
-            </div>
-          </form>
-        </div>
-
-        {/* Task List */}
-        <div className="space-y-4">
-          {optimisticTasks.map((task) => (
-            <div 
-              key={task.id}
-              onClick={() => setEditingTask(task)}
-              className="group cursor-pointer bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05] hover:border-white/10 p-5 rounded-[2rem] flex items-center justify-between transition-all duration-500 shadow-sm"
-            >
-              <div className="flex items-center gap-5">
-                {task.image_url ? (
-                  <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
-                    <img src={task.image_url} className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-center text-xl grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all">
-                    📋
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-bold text-lg tracking-tight text-slate-300 group-hover:text-white transition-colors">{task.title}</h3>
-                  <div className="flex gap-3 mt-1">
-                    <span className="text-[10px] font-black tracking-widest text-blue-500 uppercase">{task.status}</span>
-                    {task.scheduled_at && (
-                      <span className="text-[10px] font-black tracking-widest text-emerald-500 uppercase">
-                        Scheduled: {new Date(task.scheduled_at).toLocaleTimeString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-4">
-                <span className="text-slate-600 font-black text-xl">→</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Modal: Task Details & Editing */}
-        {editingTask && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[3rem] p-8 shadow-2xl relative">
-              <button 
-                onClick={() => setEditingTask(null)}
-                className="absolute top-6 right-8 text-slate-500 hover:text-white font-bold text-2xl"
-              >✕</button>
-              
-              <h2 className="text-2xl font-black mb-6 text-white italic">TASK DETAILS</h2>
-              
-              {editingTask.image_url && (
-                <div className="w-full h-48 rounded-[2rem] overflow-hidden mb-6 border border-white/10">
-                  <img src={editingTask.image_url} className="w-full h-full object-cover" />
-                </div>
-              )}
-
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 tracking-widest block mb-2 uppercase">Objective Title</label>
-                  <input 
-                    defaultValue={editingTask.title}
-                    id="edit-title"
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button 
-                    onClick={async () => {
-                      const newTitle = (document.getElementById('edit-title') as HTMLInputElement).value;
-                      await updateTaskAction(editingTask.id, newTitle, editingTask.status);
-                      setEditingTask(null);
-                    }}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold shadow-lg shadow-indigo-900/30"
-                  >SAVE CHANGES</button>
-                  <button 
-                    onClick={async () => {
-                      await deleteTaskAction(editingTask.id);
-                      setEditingTask(null);
-                    }}
-                    className="bg-red-500/10 hover:bg-red-500/20 text-red-500 px-6 py-4 rounded-2xl font-bold border border-red-500/20"
-                  >TERMINATE</button>
-                </div>
+          <div className="flex gap-4">
+            <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3 backdrop-blur-xl">
+              <Activity size={16} className="text-emerald-400" />
+              <div className="flex flex-col leading-none">
+                <span className="text-xl font-black font-mono">{optimisticTasks.length}</span>
+                <span className="text-[8px] text-slate-500 uppercase tracking-widest mt-1 font-bold">Deployments</span>
               </div>
             </div>
           </div>
-        )}
+        </motion.header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          
+          {/* Left: Input Console */}
+          <motion.div 
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="lg:col-span-5"
+          >
+            <div className="sticky top-10 space-y-6">
+              <div className="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-2xl shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[60px] group-hover:bg-blue-500/20 transition-all duration-700" />
+                
+                <form action={async (formData) => {
+                  const title = formData.get('title') as string;
+                  if (!title) return;
+                  addOptimisticTask({ id: Math.random().toString(), title, status: 'Pending', is_sent: false });
+                  await formAction(formData);
+                  setImagePreview(null);
+                  (document.getElementById('task-form') as HTMLFormElement).reset();
+                }} id="task-form" className="space-y-6">
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">Subject</label>
+                    <input name="title" placeholder="Objective..." className="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg font-bold focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" required />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">Narrative (Markdown)</label>
+                    <textarea name="description" placeholder="Technical specifications..." rows={5} className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all resize-none font-mono text-sm" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="relative group cursor-pointer bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 hover:bg-black/60 transition-all">
+                      <input type="file" name="image" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageChange} />
+                      <ImageIcon size={18} className={imagePreview ? 'text-blue-400' : 'text-slate-600'} />
+                      <span className="text-[10px] font-black uppercase text-slate-500">{imagePreview ? 'Visual Linked' : 'Add Visual'}</span>
+                    </div>
+                    <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3">
+                      <Clock size={18} className="text-slate-600" />
+                      <input type="datetime-local" name="scheduled_at" className="bg-transparent border-none outline-none text-[10px] text-slate-500 font-black uppercase w-full" />
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={isPending} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-white shadow-2xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 group">
+                    <Send size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    {isPending ? 'ENCRYPTING...' : 'INITIATE MISSION'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Right: Mission Feed */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="flex items-center justify-between px-4">
+              <div className="flex items-center gap-2">
+                <LayoutGrid size={14} className="text-blue-500" />
+                <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Live Mission Log</h2>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <AnimatePresence mode="popLayout">
+                {optimisticTasks.map((task, idx) => (
+                  <motion.div 
+                    layout
+                    key={task.id}
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                    transition={{ delay: idx * 0.05 }}
+                    onClick={() => setEditingTask(task)}
+                    className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2rem] transition-all duration-500 hover:bg-white/[0.06] relative overflow-hidden"
+                  >
+                    <div className="flex items-start gap-6">
+                      {task.image_url ? (
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0">
+                          <img src={task.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-center text-2xl opacity-20 group-hover:opacity-100 group-hover:text-blue-500 transition-all flex-shrink-0">
+                          <AlertCircle size={32} strokeWidth={1} />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-black text-xl text-white tracking-tight leading-tight">{task.title}</h3>
+                          <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_#3b82f6]"></div>
+                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">{task.status}</span>
+                          </div>
+                        </div>
+                        <p className="text-slate-500 text-xs line-clamp-2 font-mono mb-4">{task.description || 'No detailed intel available.'}</p>
+                        <div className="flex items-center gap-4 text-slate-600">
+                          {task.scheduled_at && <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-emerald-500/70"><Clock size={10} /> {new Date(task.scheduled_at).toLocaleTimeString()}</div>}
+                          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider"><ChevronRight size={10} /> Details</div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+
+        {/* Fullscreen Overlay */}
+        <AnimatePresence>
+          {editingTask && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-slate-950/95 backdrop-blur-xl"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="bg-slate-900/50 border border-white/10 w-full max-w-5xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh]"
+              >
+                {/* Media Panal */}
+                <div className="md:w-1/2 bg-black/20 flex items-center justify-center relative p-8 group">
+                  {editingTask.image_url ? (
+                    <img 
+                      src={editingTask.image_url} 
+                      className="w-full h-full object-contain drop-shadow-2xl cursor-zoom-in"
+                      onClick={() => setFullscreenImage(editingTask.image_url!)}
+                    />
+                  ) : (
+                    <Activity size={120} strokeWidth={0.5} className="text-white/5" />
+                  )}
+                  <button onClick={() => setEditingTask(null)} className="absolute top-10 left-10 text-white/40 hover:text-white transition-colors md:hidden"><X /></button>
+                </div>
+
+                {/* Content Panal */}
+                <div className="md:w-1/2 p-12 md:p-16 flex flex-col overflow-y-auto custom-scrollbar">
+                  <div className="flex justify-between items-center mb-12">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 size={24} className="text-blue-500" />
+                      <h2 className="text-sm font-black text-slate-500 tracking-[0.3em] uppercase">Intelligence Brief</h2>
+                    </div>
+                    <button onClick={() => setEditingTask(null)} className="hidden md:block text-slate-600 hover:text-white transition-colors"><X size={32} /></button>
+                  </div>
+
+                  <div className="space-y-10 flex-1">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase ml-1">Mission Header</label>
+                      <input id="edit-title" defaultValue={editingTask.title} className="w-full bg-transparent text-4xl font-black text-white outline-none" />
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase ml-1">Encrypted Log</label>
+                      <textarea id="edit-desc" defaultValue={editingTask.description} rows={6} className="w-full bg-white/5 border border-white/5 rounded-3xl p-6 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
+                    </div>
+
+                    <div className="space-y-6">
+                      <label className="text-[10px] font-black text-blue-500/50 tracking-widest uppercase ml-1">Rendered Decryption</label>
+                      <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{editingTask.description || ''}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 mt-12">
+                    <button 
+                      onClick={async () => {
+                        const t = (document.getElementById('edit-title') as HTMLInputElement).value;
+                        const d = (document.getElementById('edit-desc') as HTMLTextAreaElement).value;
+                        await updateTaskAction(editingTask.id, t, d, editingTask.status);
+                        setEditingTask(null);
+                      }}
+                      className="flex-1 bg-white text-black py-5 rounded-3xl font-black hover:bg-slate-200 transition-all shadow-xl shadow-blue-500/10"
+                    >UPDATE MISSION</button>
+                    <button 
+                      onClick={async () => {
+                        await deleteTaskAction(editingTask.id);
+                        setEditingTask(null);
+                      }}
+                      className="bg-red-500/10 text-red-500 px-10 py-5 rounded-3xl font-black border border-red-500/20 hover:bg-red-500/20 transition-all"
+                    ><Trash2 size={20} /></button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Fullscreen Image Preview */}
+        <AnimatePresence>
+          {fullscreenImage && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setFullscreenImage(null)} 
+              className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center p-4 cursor-zoom-out"
+            >
+              <motion.img 
+                layoutId="hero-image"
+                src={fullscreenImage} 
+                className="max-w-full max-h-full object-contain shadow-[0_0_100px_rgba(0,0,0,0.5)]" 
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      `}</style>
     </div>
   );
 }
