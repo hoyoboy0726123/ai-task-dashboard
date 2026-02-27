@@ -1,4 +1,5 @@
 // ai-task-dashboard/app/page.tsx
+// Last Update: 2026-02-27 19:00:00 (Forced Sync)
 import TaskDashboard, { Task } from '@/components/TaskDashboard';
 import { sql } from '@vercel/postgres';
 
@@ -17,7 +18,7 @@ export default async function Home() {
         status: String(row.status || 'Pending'),
         image_url: row.image_url ? String(row.image_url) : undefined,
         scheduled_at: row.scheduled_at ? new Date(row.scheduled_at).toISOString() : undefined,
-        is_sent: Boolean(row.is_sent) // 強制轉為 boolean 確保符合型別
+        is_sent: Boolean(row.is_sent) // 修正型別缺失
       };
     });
   } catch (error) {
