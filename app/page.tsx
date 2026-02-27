@@ -2,24 +2,24 @@
 import TaskDashboard, { Task } from '@/components/TaskDashboard';
 import { sql } from '@vercel/postgres';
 
-export const dynamic = 'force-dynamic'; // 確保每次造訪都抓最新資料
+export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   let tasks: Task[] = [];
 
   try {
-    // 從 Postgres 獲取所有任務，按 ID 排序（最新的在上面）
     const { rows } = await sql`SELECT * FROM tasks ORDER BY id DESC`;
     
-    // 將資料格式轉換為組件需要的格式
     tasks = rows.map(row => ({
       id: row.id.toString(),
       title: row.title,
-      status: row.status as 'Pending' | 'Completed'
+      status: row.status as 'Pending' | 'Completed',
+      image_url: row.image_url || undefined,
+      scheduled_at: row.scheduled_at ? row.scheduled_at.toISOString() : undefined,
+      is_sent: row.is_sent ?? false // 核心修正：加入 is_sent 屬性
     }));
   } catch (error) {
     console.error('Failed to fetch tasks:', error);
-    // 如果資料庫還沒建立，先顯示預設訊息
     tasks = [];
   }
 
