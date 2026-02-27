@@ -2,34 +2,57 @@
 import { NextResponse } from 'next/server';
 import { sendTelegramNotification } from '@/lib/telegram';
 import { sql } from '@vercel/postgres';
+import { put } from '@vercel/blob';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    if (body.message && body.message.text) {
-      const command = body.message.text;
+    const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-      // 1. 查詢狀態指令
-      if (command === '/status') {
-        await sendTelegramNotification(`📊 *Status Report*\n\n✅ Frontend: Active\n✅ Backend: Online\n📝 Database: Connected`);
-      } 
+    if (!body.message) return NextResponse.json({ ok: true });
+
+    const msg = body.message;
+    let taskTitle = msg.text || msg.caption || 'New Task (Media)';
+    let imageUrl = '';
+
+    // --- 處理圖片訊息 ---
+    if (msg.photo && msg.photo.length > 0) {
+      // 取解析度最高的圖片 (數組最後一個)
+      const fileId = msg.photo[msg.photo.length - 1].file_id;
       
-      // 2. 新增任務指令 (格式如: /add 買牛奶)
-      else if (command.startsWith('/add')) {
-        const taskTitle = command.replace('/add', '').trim();
+      // 1. 取得檔案路徑
+      const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`);
+      const fileData = await fileRes.json();
+      
+      if (fileData.ok) {
+        const filePath = fileData.result.file_path;
+        const downloadUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
         
-        if (taskTitle) {
-          // --- 核心修正：將資料寫入 Postgres ---
-          await sql`
-            INSERT INTO tasks (title, status)
-            VALUES (${taskTitle}, 'Pending')
-          `;
-          
-          await sendTelegramNotification(`✅ *Task Synced to Dashboard*\n\n📌 Title: ${taskTitle}\n\n您現在可以重新整理儀表板查看成果！`);
-        } else {
-          await sendTelegramNotification(`⚠️ 請在 /add 後方輸入任務名稱。`);
-        }
+        // 2. 下載並轉存至 Vercel Blob
+        const imageRes = await fetch(downloadUrl);
+        const arrayBuffer = await imageRes.arrayBuffer();
+        const blob = await put(`telegram_${fileId}.jpg`, arrayBuffer, { access: 'public' });
+        imageUrl = blob.url;
+      }
+    }
+
+    // --- 處理指令與同步 ---
+    if (msg.text === '/status') {
+      await sendTelegramNotification(`📊 *Status Report*\n\n✅ Services: Online\n📁 Storage: Blob Ready`);
+    } 
+    else if (msg.text?.startsWith('/add') || msg.photo) {
+      // 如果是 /add 指令，移除前綴
+      if (taskTitle.startsWith('/add')) {
+        taskTitle = taskTitle.replace('/add', '').trim();
+      }
+
+      if (taskTitle || imageUrl) {
+        await sql`
+          INSERT INTO tasks (title, image_url, status, is_sent)
+          VALUES (${taskTitle}, ${imageUrl}, 'Pending', TRUE)
+        `;
+        
+        await sendTelegramNotification(`✅ *Sync Successful*\n\n📌 Title: ${taskTitle}\n${imageUrl ? `🖼 Image: [Stored in Blob](${imageUrl})` : ''}`);
       }
     }
 
