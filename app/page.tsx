@@ -1,5 +1,4 @@
 // ai-task-dashboard/app/page.tsx
-// Deployment Final Sync: 2026-02-27 23:25:00
 import TaskDashboard, { Task } from '@/components/TaskDashboard';
 import { sql } from '@vercel/postgres';
 
@@ -15,6 +14,7 @@ export default async function Home() {
       return {
         id: String(row.id),
         title: String(row.title || 'Untitled'),
+        description: String(row.description || ''), // 確保 description 被讀取
         status: String(row.status || 'Pending'),
         image_url: row.image_url ? String(row.image_url) : undefined,
         scheduled_at: row.scheduled_at ? new Date(row.scheduled_at).toISOString() : undefined,

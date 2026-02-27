@@ -45,7 +45,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-cyan-500/30 overflow-x-hidden">
       
-      {/* Dynamic Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/30 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/20 blur-[120px] rounded-full" />
@@ -53,14 +52,13 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
       <div className="max-w-6xl mx-auto p-6 md:p-12 relative z-10">
         
-        {/* Header Section */}
         <motion.header 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col md:flex-row justify-between items-center mb-16 gap-6"
         >
-          <div className="text-center md:text-left">
-            <h1 className="text-6xl font-black tracking-tighter bg-gradient-to-r from-white via-slate-200 to-slate-500 bg-clip-text text-transparent italic">
+          <div className="text-center md:text-left pr-10">
+            <h1 className="text-6xl font-black tracking-tighter bg-gradient-to-r from-white via-slate-200 to-slate-500 bg-clip-text text-transparent italic text-shadow-glow pb-2">
               AI COMMAND
             </h1>
             <div className="flex items-center gap-3 mt-2 justify-center md:justify-start">
@@ -82,7 +80,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          {/* Left: Input Console */}
           <motion.div 
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -91,12 +88,22 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
           >
             <div className="sticky top-10 space-y-6">
               <div className="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-2xl shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[60px] group-hover:bg-blue-500/20 transition-all duration-700" />
                 
                 <form action={async (formData) => {
                   const title = formData.get('title') as string;
+                  const description = formData.get('description') as string;
                   if (!title) return;
-                  addOptimisticTask({ id: Math.random().toString(), title, status: 'Pending', is_sent: false });
+
+                  // --- 修正樂觀更新邏輯 ---
+                  addOptimisticTask({ 
+                    id: Math.random().toString(), 
+                    title, 
+                    description, 
+                    status: 'Pending', 
+                    image_url: imagePreview || undefined, // 使用當前預覽圖作為臨時顯示
+                    is_sent: false 
+                  });
+
                   await formAction(formData);
                   setImagePreview(null);
                   (document.getElementById('task-form') as HTMLFormElement).reset();
@@ -109,14 +116,17 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">Narrative (Markdown)</label>
-                    <textarea name="description" placeholder="Technical specifications..." rows={5} className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all resize-none font-mono text-sm" />
+                    <textarea name="description" placeholder="Technical specifications..." rows={5} className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all resize-none font-mono text-sm leading-relaxed" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="relative group cursor-pointer bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 hover:bg-black/60 transition-all">
-                      <input type="file" name="image" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageChange} />
+                    <div className="relative group cursor-pointer bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 hover:bg-black/60 transition-all overflow-hidden">
+                      <input type="file" name="image" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageChange} />
+                      {imagePreview ? (
+                        <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-[2px]" />
+                      ) : null}
                       <ImageIcon size={18} className={imagePreview ? 'text-blue-400' : 'text-slate-600'} />
-                      <span className="text-[10px] font-black uppercase text-slate-500">{imagePreview ? 'Visual Linked' : 'Add Visual'}</span>
+                      <span className="text-[10px] font-black uppercase text-slate-500 relative z-20">{imagePreview ? 'Visual Linked' : 'Add Visual'}</span>
                     </div>
                     <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3">
                       <Clock size={18} className="text-slate-600" />
@@ -126,7 +136,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
                   <button type="submit" disabled={isPending} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-white shadow-2xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 group">
                     <Send size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    {isPending ? 'ENCRYPTING...' : 'INITIATE MISSION'}
+                    {isPending ? 'DEPLOYING...' : 'INITIATE MISSION'}
                   </button>
                 </form>
               </div>
@@ -153,11 +163,11 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                     exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                     transition={{ delay: idx * 0.05 }}
                     onClick={() => setEditingTask(task)}
-                    className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2rem] transition-all duration-500 hover:bg-white/[0.06] relative overflow-hidden"
+                    className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2rem] transition-all duration-500 hover:bg-white/[0.06] relative"
                   >
                     <div className="flex items-start gap-6">
                       {task.image_url ? (
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0">
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0 bg-black/40">
                           <img src={task.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                         </div>
                       ) : (
@@ -165,18 +175,18 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                           <AlertCircle size={32} strokeWidth={1} />
                         </div>
                       )}
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-black text-xl text-white tracking-tight leading-tight">{task.title}</h3>
-                          <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_#3b82f6]"></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start mb-2 gap-4">
+                          <h3 className="font-black text-xl text-white tracking-tight leading-tight truncate">{task.title}</h3>
+                          <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full flex items-center gap-2 flex-shrink-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
                             <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">{task.status}</span>
                           </div>
                         </div>
-                        <p className="text-slate-500 text-xs line-clamp-2 font-mono mb-4">{task.description || 'No detailed intel available.'}</p>
+                        <p className="text-slate-500 text-xs line-clamp-2 font-mono mb-4 break-all">{task.description || 'No detailed intel available.'}</p>
                         <div className="flex items-center gap-4 text-slate-600">
                           {task.scheduled_at && <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-emerald-500/70"><Clock size={10} /> {new Date(task.scheduled_at).toLocaleTimeString()}</div>}
-                          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider"><ChevronRight size={10} /> Details</div>
+                          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider"><ChevronRight size={10} /> View Brief</div>
                         </div>
                       </div>
                     </div>
@@ -187,21 +197,20 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
           </div>
         </div>
 
-        {/* Fullscreen Overlay */}
+        {/* Modal: Details */}
         <AnimatePresence>
           {editingTask && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-slate-950/95 backdrop-blur-xl"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-slate-950/95 backdrop-blur-xl overflow-y-auto"
             >
               <motion.div 
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
-                className="bg-slate-900/50 border border-white/10 w-full max-w-5xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh]"
+                className="bg-slate-900/50 border border-white/10 w-full max-w-5xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]"
               >
-                {/* Media Panal */}
                 <div className="md:w-1/2 bg-black/20 flex items-center justify-center relative p-8 group">
                   {editingTask.image_url ? (
                     <img 
@@ -215,29 +224,28 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                   <button onClick={() => setEditingTask(null)} className="absolute top-10 left-10 text-white/40 hover:text-white transition-colors md:hidden"><X /></button>
                 </div>
 
-                {/* Content Panal */}
                 <div className="md:w-1/2 p-12 md:p-16 flex flex-col overflow-y-auto custom-scrollbar">
                   <div className="flex justify-between items-center mb-12">
                     <div className="flex items-center gap-3">
                       <CheckCircle2 size={24} className="text-blue-500" />
-                      <h2 className="text-sm font-black text-slate-500 tracking-[0.3em] uppercase">Intelligence Brief</h2>
+                      <h2 className="text-sm font-black text-slate-500 tracking-[0.3em] uppercase">Mission Details</h2>
                     </div>
                     <button onClick={() => setEditingTask(null)} className="hidden md:block text-slate-600 hover:text-white transition-colors"><X size={32} /></button>
                   </div>
 
                   <div className="space-y-10 flex-1">
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase ml-1">Mission Header</label>
-                      <input id="edit-title" defaultValue={editingTask.title} className="w-full bg-transparent text-4xl font-black text-white outline-none" />
+                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase">Objective Header</label>
+                      <input id="edit-title" defaultValue={editingTask.title} className="w-full bg-transparent text-4xl font-black text-white outline-none border-b border-white/5 focus:border-blue-500 transition-all pb-2" />
                     </div>
 
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase ml-1">Encrypted Log</label>
-                      <textarea id="edit-desc" defaultValue={editingTask.description} rows={6} className="w-full bg-white/5 border border-white/5 rounded-3xl p-6 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
+                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase">Intel Log (Markdown)</label>
+                      <textarea id="edit-desc" defaultValue={editingTask.description} rows={8} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
                     </div>
 
                     <div className="space-y-6">
-                      <label className="text-[10px] font-black text-blue-500/50 tracking-widest uppercase ml-1">Rendered Decryption</label>
+                      <label className="text-[10px] font-black text-blue-500/50 tracking-widest uppercase">Decrypted Preview</label>
                       <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{editingTask.description || ''}</ReactMarkdown>
                       </div>
@@ -252,14 +260,14 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                         await updateTaskAction(editingTask.id, t, d, editingTask.status);
                         setEditingTask(null);
                       }}
-                      className="flex-1 bg-white text-black py-5 rounded-3xl font-black hover:bg-slate-200 transition-all shadow-xl shadow-blue-500/10"
+                      className="flex-1 bg-white text-black py-5 rounded-3xl font-black hover:bg-slate-200 transition-all"
                     >UPDATE MISSION</button>
                     <button 
                       onClick={async () => {
                         await deleteTaskAction(editingTask.id);
                         setEditingTask(null);
                       }}
-                      className="bg-red-500/10 text-red-500 px-10 py-5 rounded-3xl font-black border border-red-500/20 hover:bg-red-500/20 transition-all"
+                      className="bg-red-500/10 text-red-500 px-10 py-5 rounded-3xl font-black border border-red-500/20 hover:bg-red-500/20"
                     ><Trash2 size={20} /></button>
                   </div>
                 </div>
@@ -268,21 +276,14 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
           )}
         </AnimatePresence>
 
-        {/* Fullscreen Image Preview */}
         <AnimatePresence>
           {fullscreenImage && (
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setFullscreenImage(null)} 
               className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center p-4 cursor-zoom-out"
             >
-              <motion.img 
-                layoutId="hero-image"
-                src={fullscreenImage} 
-                className="max-w-full max-h-full object-contain shadow-[0_0_100px_rgba(0,0,0,0.5)]" 
-              />
+              <img src={fullscreenImage} className="max-w-full max-h-full object-contain" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -294,6 +295,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        .text-shadow-glow { text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
       `}</style>
     </div>
   );
