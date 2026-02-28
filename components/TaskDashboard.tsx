@@ -25,7 +25,7 @@ export type Task = {
 export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }) {
   const [state, formAction, isPending] = useActionState(createTaskAction, { success: true });
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // 控制圖片區域收折
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -46,7 +46,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-cyan-500/30 overflow-x-hidden font-sans">
       
-      {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/30 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/20 blur-[120px] rounded-full" />
@@ -54,7 +53,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
       <div className="max-w-6xl mx-auto p-6 md:p-12 relative z-10">
         
-        {/* Header */}
         <motion.header 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -83,7 +81,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          {/* Left Panel: Input */}
           <motion.div 
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -195,7 +192,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                 animate={{ scale: 1, y: 0 }}
                 className="bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh]"
               >
-                {/* Left Panel: Media (with Collapsible logic) */}
+                {/* Left Panel: Media */}
                 <AnimatePresence mode="wait">
                   {isSidebarOpen && editingTask.image_url && (
                     <motion.div 
@@ -249,8 +246,11 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
                     <div className="space-y-6">
                       <label className="text-[10px] font-black text-blue-500/50 tracking-widest uppercase">Decrypted Preview</label>
-                      <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{editingTask.description || ''}</ReactMarkdown>
+                      {/* 核心修正：加入 break-words 與 overflow 控制 */}
+                      <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner overflow-x-hidden break-words">
+                        <div className="overflow-x-auto custom-scrollbar">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{editingTask.description || ''}</ReactMarkdown>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -297,11 +297,14 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
       </div>
 
       <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
         .text-shadow-glow { text-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
+        /* 確保 Pre/Code 塊不會溢出 */
+        .prose pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
+        .prose table { display: block; overflow-x: auto; max-width: 100%; }
       `}</style>
     </div>
   );
