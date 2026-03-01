@@ -5,11 +5,12 @@ import { useActionState, useOptimistic, useState, useEffect } from 'react';
 import { createTaskAction, deleteTaskAction, updateTaskAction } from '@/app/actions';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks'; // 新增：處理換行
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Send, Image as ImageIcon, Clock, Trash2, 
   ChevronRight, X, ExternalLink, LayoutGrid, 
-  Activity, CheckCircle2, AlertCircle, Maximize2, Minimize2
+  Activity, CheckCircle2, FileText, Maximize2, Minimize2
 } from 'lucide-react';
 
 export type Task = { 
@@ -46,6 +47,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-cyan-500/30 overflow-x-hidden font-sans">
       
+      {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/30 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/20 blur-[120px] rounded-full" />
@@ -53,6 +55,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
       <div className="max-w-6xl mx-auto p-6 md:p-12 relative z-10">
         
+        {/* Header */}
         <motion.header 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -81,6 +84,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
+          {/* Left Panel: Input */}
           <motion.div 
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -153,8 +157,8 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                           <img src={task.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                         </div>
                       ) : (
-                        <div className="w-20 h-20 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-center text-2xl opacity-20 group-hover:opacity-100 group-hover:text-blue-500 transition-all flex-shrink-0">
-                          <AlertCircle size={32} strokeWidth={1} />
+                        <div className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-slate-600 group-hover:text-blue-400 group-hover:bg-blue-500/5 transition-all flex-shrink-0">
+                          <FileText size={32} strokeWidth={1.5} />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
@@ -190,7 +194,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
               <motion.div 
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
-                className="bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh]"
+                className={`bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh] ${!editingTask.image_url ? 'md:max-w-3xl' : ''}`}
               >
                 {/* Left Panel: Media */}
                 <AnimatePresence mode="wait">
@@ -246,10 +250,14 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
                     <div className="space-y-6">
                       <label className="text-[10px] font-black text-blue-500/50 tracking-widest uppercase">Decrypted Preview</label>
-                      {/* 核心修正：加入 break-words 與 overflow 控制 */}
                       <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner overflow-x-hidden break-words">
                         <div className="overflow-x-auto custom-scrollbar">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{editingTask.description || ''}</ReactMarkdown>
+                          {/* 核心修正：加入 remarkBreaks 並優化 p 標籤樣式 */}
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                          >
+                            {editingTask.description || ''}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>
@@ -302,9 +310,11 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
         .text-shadow-glow { text-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
-        /* 確保 Pre/Code 塊不會溢出 */
         .prose pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
-        .prose table { display: block; overflow-x: auto; max-width: 100%; }
+        .prose table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; }
+        .prose th, .prose td { border: 1px solid rgba(255,255,255,0.1); padding: 8px; }
+        .prose p { white-space: pre-wrap; } /* 關鍵修正：保留段落內的換行 */
+        .prose a { color: #60a5fa; text-decoration: underline; text-underline-offset: 4px; }
       `}</style>
     </div>
   );
