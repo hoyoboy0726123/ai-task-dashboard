@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Send, Image as ImageIcon, Clock, Trash2, 
   ChevronRight, ChevronLeft, X, ExternalLink, LayoutGrid, 
-  Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers
+  Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers, Edit3, Eye
 } from 'lucide-react';
 
 export type Task = { 
@@ -27,6 +27,7 @@ export type Task = {
 export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }) {
   const [state, formAction, isPending] = useActionState(createTaskAction, { success: true });
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
         
         <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-center mb-16 gap-6">
           <div className="text-center md:text-left pr-10">
-            <h1 className="text-6xl font-black tracking-tighter bg-gradient-to-r from-white via-slate-200 to-slate-500 bg-clip-text text-transparent italic text-shadow-glow pb-2">AI COMMAND</h1>
+            <h1 className="text-6xl font-black tracking-tighter bg-gradient-to-r from-white via-slate-200 to-slate-500 bg-clip-text text-transparent italic text-shadow-glow pb-2 leading-none">AI COMMAND</h1>
             <div className="flex items-center gap-3 mt-2 justify-center md:justify-start">
               <span className="h-[1px] w-8 bg-blue-500"></span>
               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400">Tactical Control Center</p>
@@ -81,7 +82,16 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                   const title = formData.get('title') as string;
                   const description = formData.get('description') as string;
                   if (!title) return;
-                  addOptimisticTask({ id: Math.random().toString(), title, description, status: 'Pending', is_sent: false });
+                  // 修正樂觀更新資料結構
+                  addOptimisticTask({ 
+                    id: Math.random().toString(), 
+                    title, 
+                    description, 
+                    status: 'Pending', 
+                    image_url: imagePreview || undefined,
+                    image_urls: imagePreview ? [imagePreview] : [],
+                    is_sent: false 
+                  });
                   await formAction(formData);
                   setImagePreview(null);
                   (document.getElementById('task-form') as HTMLFormElement).reset();
@@ -99,7 +109,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                       <input type="file" name="image" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageChange} />
                       {imagePreview && <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-[1px]" />}
                       <ImageIcon size={18} className={imagePreview ? 'text-blue-400' : 'text-slate-600'} />
-                      <span className="text-[10px] font-black uppercase text-slate-500 z-20">{imagePreview ? 'Media Linked' : 'Add Visuals'}</span>
+                      <span className="text-[10px] font-black uppercase text-slate-500 z-20">Add Visuals</span>
                     </div>
                     <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3">
                       <Clock size={18} className="text-slate-600" />
@@ -124,7 +134,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                     initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                     transition={{ delay: idx * 0.05 }}
-                    onClick={() => { setEditingTask(task); setIsSidebarOpen(true); setCurrentImgIdx(0); }}
+                    onClick={() => { setEditingTask(task); setIsSidebarOpen(true); setCurrentImgIdx(0); setIsEditMode(false); }}
                     className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2rem] transition-all duration-500 hover:bg-white/[0.06] relative"
                   >
                     <div className="flex items-start gap-6">
@@ -133,13 +143,11 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                           <>
                             <img src={task.image_urls?.[0] || task.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                             {task.image_urls && task.image_urls.length > 1 && (
-                              <div className="absolute top-1 right-1 bg-black/60 p-1 rounded-lg">
-                                <Layers size={10} className="text-white" />
-                              </div>
+                              <div className="absolute top-1 right-1 bg-black/60 p-1 rounded-lg"><Layers size={10} className="text-white" /></div>
                             )}
                           </>
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-600 opacity-20 group-hover:opacity-100 group-hover:text-blue-500 transition-all">
+                          <div className="w-full h-full flex items-center justify-center text-slate-600 opacity-20 group-hover:opacity-100 group-hover:text-blue-400 transition-all">
                             <FileText size={32} />
                           </div>
                         )}
@@ -164,35 +172,27 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
         <AnimatePresence>
           {editingTask && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-12 bg-slate-950/95 backdrop-blur-xl overflow-y-auto">
-              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh]">
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className={`bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh] ${(!editingTask.image_urls || editingTask.image_urls.length === 0) && !editingTask.image_url ? 'md:max-w-3xl' : ''}`}>
                 
                 {/* Carousel Sidebar */}
                 <AnimatePresence mode="wait">
-                  {isSidebarOpen && (editingTask.image_urls?.length || editingTask.image_url) && (
+                  {isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && (
                     <motion.div key="sidebar" initial={{ width: 0, opacity: 0 }} animate={{ width: '50%', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="hidden md:flex bg-black/40 items-center justify-center relative group border-r border-white/5 overflow-hidden">
                       <div className="w-full h-full relative flex items-center justify-center p-8">
                         <AnimatePresence mode="wait">
                           <motion.img 
                             key={currentImgIdx}
                             src={editingTask.image_urls?.[currentImgIdx] || editingTask.image_url} 
-                            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.1 }}
                             className="w-full h-full object-contain drop-shadow-2xl cursor-zoom-in"
                             onClick={() => setFullscreenImage(editingTask.image_urls?.[currentImgIdx] || editingTask.image_url!)}
                           />
                         </AnimatePresence>
 
-                        {/* Carousel Controls */}
                         {editingTask.image_urls && editingTask.image_urls.length > 1 && (
                           <>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev > 0 ? prev - 1 : editingTask.image_urls!.length - 1)) }}
-                              className="absolute left-4 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                            ><ChevronLeft /></button>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev < editingTask.image_urls!.length - 1 ? prev + 1 : 0)) }}
-                              className="absolute right-4 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                            ><ChevronRight /></button>
-                            {/* Dots */}
+                            <button onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev > 0 ? prev - 1 : editingTask.image_urls!.length - 1)) }} className="absolute left-4 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"><ChevronLeft /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev < editingTask.image_urls!.length - 1 ? prev + 1 : 0)) }} className="absolute right-4 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"><ChevronRight /></button>
                             <div className="absolute bottom-6 flex gap-2">
                               {editingTask.image_urls.map((_, i) => (
                                 <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentImgIdx ? 'bg-blue-500 w-4' : 'bg-white/20'}`} />
@@ -205,19 +205,22 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                   )}
                 </AnimatePresence>
 
-                <div className={`p-8 md:p-16 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${isSidebarOpen && (editingTask.image_urls?.length || editingTask.image_url) ? 'md:w-1/2' : 'w-full'}`}>
+                <div className={`p-8 md:p-16 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) ? 'md:w-1/2' : 'w-full'}`}>
                   <div className="flex justify-between items-center mb-12">
                     <div className="flex items-center gap-3">
                       <CheckCircle2 size={24} className="text-blue-500" />
-                      <h2 className="text-sm font-black text-slate-500 tracking-[0.3em] uppercase">Intelligence Brief</h2>
+                      <h2 className="text-sm font-black text-slate-500 tracking-[0.3em] uppercase">Intelligence Detail</h2>
                     </div>
                     <div className="flex items-center gap-4">
-                      {(editingTask.image_urls?.length || editingTask.image_url) && (
+                      {((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && (
                         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                           {isSidebarOpen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                           <span>{isSidebarOpen ? 'Focus' : 'Media'}</span>
                         </button>
                       )}
+                      <button onClick={() => setIsEditMode(!isEditMode)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-blue-400">
+                        {isEditMode ? <Eye size={20} /> : <Edit3 size={20} />}
+                      </button>
                       <button onClick={() => setEditingTask(null)} className="text-slate-600 hover:text-white"><X size={32} /></button>
                     </div>
                   </div>
@@ -227,24 +230,24 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                       <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase">Mission Header</label>
                       <input id="edit-title" defaultValue={editingTask.title} className="w-full bg-transparent text-4xl font-black text-white outline-none border-b border-white/5 focus:border-blue-500 pb-2" />
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase">Intel Log</label>
-                      <textarea id="edit-desc" defaultValue={editingTask.description} rows={8} className="w-full bg-white/5 border border-white/5 rounded-3xl p-6 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
-                    </div>
                     <div className="space-y-6">
-                      <label className="text-[10px] font-black text-blue-500/50 tracking-widest uppercase">Decrypted Preview</label>
-                      <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner overflow-x-hidden break-words">
-                        <div className="overflow-x-auto custom-scrollbar">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || ''}</ReactMarkdown>
+                      <label className="text-[10px] font-black text-slate-600 tracking-widest uppercase">Objective Log</label>
+                      {isEditMode ? (
+                        <textarea id="edit-desc" defaultValue={editingTask.description} rows={12} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
+                      ) : (
+                        <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner overflow-x-hidden break-words cursor-pointer hover:bg-white/[0.04]" onClick={() => setIsEditMode(true)}>
+                          <div className="overflow-x-auto custom-scrollbar">
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || '*No detailed briefing.*'}</ReactMarkdown>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex gap-4 mt-12">
                     <button onClick={async () => {
                       const t = (document.getElementById('edit-title') as HTMLInputElement).value;
-                      const d = (document.getElementById('edit-desc') as HTMLTextAreaElement).value;
+                      const d = isEditMode ? (document.getElementById('edit-desc') as HTMLTextAreaElement).value : (editingTask.description || '');
                       await updateTaskAction(editingTask.id, t, d, editingTask.status);
                       setEditingTask(null);
                     }} className="flex-1 bg-white text-black py-5 rounded-3xl font-black hover:bg-slate-200 transition-all">UPDATE MISSION</button>
@@ -259,7 +262,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
         <AnimatePresence>
           {fullscreenImage && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setFullscreenImage(null)} className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center p-4 cursor-zoom-out">
-              <img src={fullscreenImage} className="max-w-full max-h-full object-contain" />
+              <img src={fullscreenImage} className="max-w-full max-h-full object-contain shadow-[0_0_100px_rgba(0,0,0,0.5)]" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -270,6 +273,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
         .text-shadow-glow { text-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
         .prose pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
         .prose table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; }
