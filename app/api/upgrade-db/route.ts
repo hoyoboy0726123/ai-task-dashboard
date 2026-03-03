@@ -4,15 +4,15 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // 擴充 tasks 資料表
     await sql`
       ALTER TABLE tasks 
-      ADD COLUMN IF NOT EXISTS image_url TEXT,
-      ADD COLUMN IF NOT EXISTS description TEXT,
-      ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS is_sent BOOLEAN DEFAULT FALSE;
+      DROP COLUMN IF EXISTS image_urls;
     `;
-    return NextResponse.json({ message: "Database schema upgraded successfully" });
+    await sql`
+      ALTER TABLE tasks 
+      ADD COLUMN image_urls JSONB DEFAULT '[]';
+    `;
+    return NextResponse.json({ message: "Database upgraded to JSONB for multiple images" });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Migration failed" }, { status: 500 });

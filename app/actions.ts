@@ -8,24 +8,36 @@ import { revalidatePath } from 'next/cache';
 
 export async function createTaskAction(prevState: any, formData: FormData) {
   const title = formData.get('title') as string;
-  const description = formData.get('description') as string; // 新增長描述
+  const description = formData.get('description') as string;
   const scheduledAt = formData.get('scheduled_at') as string;
-  const imageFile = formData.get('image') as any;
+  const imageFiles = formData.getAll('image') as any[];
 
   try {
-    let imageUrl = '';
-    if (imageFile && typeof imageFile === 'object' && 'size' in imageFile && imageFile.size > 0) {
-      const blob = await put(imageFile.name, imageFile, { access: 'public' });
-      imageUrl = blob.url;
+    const imageUrls: string[] = [];
+    for (const file of imageFiles) {
+      if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
+        const blob = await put(file.name, file, { access: 'public' });
+        imageUrls.push(blob.url);
+      }
     }
 
+    // 將陣列轉為 Postgres 支援的 JSON 字串存儲
+    const imageUrlsJson = JSON.stringify(imageUrls);
+
     await sql`
-      INSERT INTO tasks (title, description, image_url, scheduled_at, is_sent)
-      VALUES (${title}, ${description || ''}, ${imageUrl}, ${scheduledAt || null}, ${scheduledAt ? false : true})
+      INSERT INTO tasks (title, description, image_url, image_urls, scheduled_at, is_sent)
+      VALUES (
+        ${title}, 
+        ${description || ''}, 
+        ${imageUrls[0] || ''}, 
+        ${imageUrlsJson}, 
+        ${scheduledAt || null}, 
+        ${scheduledAt ? false : true}
+      )
     `;
 
     if (!scheduledAt) {
-      const message = `🚀 *New Task*\n\n📌 *${title}*\n${description ? `📝 ${description.substring(0, 100)}...\n` : ''}${imageUrl ? `\n🖼 [View Attachment](${imageUrl})` : ''}`;
+      const message = `🚀 *New Entry with ${imageUrls.length} Media*\n\n📌 *${title}*${imageUrls.length > 0 ? `\n🖼 [View First Photo](${imageUrls[0]})` : ''}`;
       await sendTelegramNotification(message);
     }
 
@@ -33,7 +45,7 @@ export async function createTaskAction(prevState: any, formData: FormData) {
     return { success: true };
   } catch (error) {
     console.error('Server Action Error:', error);
-    return { success: false, message: 'Failed to create task' };
+    return { success: false, message: 'Failed to create' };
   }
 }
 
@@ -42,9 +54,7 @@ export async function deleteTaskAction(id: string) {
     await sql`DELETE FROM tasks WHERE id = ${id}`;
     revalidatePath('/');
     return { success: true };
-  } catch (error) {
-    return { success: false };
-  }
+  } catch (error) { return { success: false }; }
 }
 
 export async function updateTaskAction(id: string, title: string, description: string, status: string) {
@@ -52,7 +62,5 @@ export async function updateTaskAction(id: string, title: string, description: s
     await sql`UPDATE tasks SET title = ${title}, description = ${description}, status = ${status} WHERE id = ${id}`;
     revalidatePath('/');
     return { success: true };
-  } catch (error) {
-    return { success: false };
-  }
+  } catch (error) { return { success: false }; }
 }
