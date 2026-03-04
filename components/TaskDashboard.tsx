@@ -1,17 +1,17 @@
 // ai-task-dashboard/components/TaskDashboard.tsx
 'use client';
 
-import { useActionState, useOptimistic, useState, useEffect } from 'react';
+import { useActionState, useOptimistic, useState, useRef } from 'react';
 import { createTaskAction, deleteTaskAction, updateTaskAction } from '@/app/actions';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { motion, AnimatePresence } from 'framer-motion';
-import imageCompression from 'browser-image-compression'; // 新增：壓縮套件
+import imageCompression from 'browser-image-compression';
 import { 
   Send, Image as ImageIcon, Clock, Trash2, 
-  ChevronRight, ChevronLeft, X, ExternalLink, LayoutGrid, 
-  Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers, Edit3, Eye, Loader2
+  ChevronRight, ChevronLeft, X, LayoutGrid, 
+  Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers, Edit3, Eye, Loader2, AlertTriangle
 } from 'lucide-react';
 
 export type Task = { 
@@ -32,39 +32,34 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [compressedFile, setCompressedFile] = useState<File | null>(null); // 儲存壓縮後的實體
   const [currentImgIdx, setCurrentImgIdx] = useState(0);
-  const [isCompressing, setIsCompressing] = useState(false); // 新增：壓縮狀態
+  const [isCompressing, setIsCompressing] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
     initialTasks,
     (state, newTask: Task) => [newTask, ...state]
   );
 
-  // --- 核心優化：檔案選取與自動壓縮 ---
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setIsCompressing(true);
-    
-    // 雖然 input 支援多選，但我們先針對第一張進行高品質預覽與壓縮優化
     const file = files[0];
     
-    const options = {
-      maxSizeMB: 1, // 目標 1MB 以下
-      maxWidthOrHeight: 1920, // 4K 以內
-      useWebWorker: true,
-    };
-
     try {
-      const compressedFile = await imageCompression(file, options);
+      const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1920, useWebWorker: true };
+      const compressed = await imageCompression(file, options);
+      
+      // 將壓縮後的 Blob 轉回 File 對象以便提交
+      const finalFile = new File([compressed], file.name, { type: file.type });
+      setCompressedFile(finalFile);
+
       const reader = new FileReader();
       reader.onloadend = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(compressedFile);
-      
-      // 注意：這裡我們將壓縮後的 Blob 傳遞回原生的 input 是有難度的
-      // 但我們之後在 Form 提交時會透過樂觀更新確保流程
-      console.log(`Compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+      reader.readAsDataURL(compressed);
     } catch (error) {
       console.error('Compression Error:', error);
     } finally {
@@ -72,12 +67,47 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
     }
   };
 
+  // --- 核心修正：手動處理表單提交，確保傳送壓縮後的檔案 ---
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    if (!title) return;
+
+    // 1. 如果有壓縮後的檔案，替換掉 formData 裡的原始檔案
+    if (compressedFile) {
+      formData.delete('image');
+      formData.append('image', compressedFile);
+    }
+
+    // 2. 執行樂觀更新
+    addOptimisticTask({ 
+      id: Math.random().toString(), 
+      title, 
+      description, 
+      status: 'Pending', 
+      is_sent: false, 
+      image_url: imagePreview || undefined,
+      image_urls: imagePreview ? [imagePreview] : []
+    });
+
+    // 3. 呼叫真正的 Server Action
+    await formAction(formData);
+    
+    // 4. 重設狀態
+    setImagePreview(null);
+    setCompressedFile(null);
+    formRef.current?.reset();
+  };
+
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-cyan-500/30 overflow-x-hidden font-sans">
       
-      <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/30 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/20 blur-[120px] rounded-full" />
+      <div className="fixed inset-0 pointer-events-none opacity-20">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[150px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 blur-[150px] rounded-full" />
       </div>
 
       <div className="max-w-6xl mx-auto p-6 md:p-12 relative z-10">
@@ -99,41 +129,43 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
           </div>
         </motion.header>
 
+        {/* Error Alert */}
+        <AnimatePresence>
+          {state && !state.success && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mb-6 bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-3 text-red-400 text-sm">
+              <AlertTriangle size={18} />
+              <span>{state.message || 'System error: Deployment failed. Check file size.'}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-5">
             <div className="sticky top-10 space-y-6">
               <div className="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-2xl shadow-2xl relative overflow-hidden group">
-                <form action={async (formData) => {
-                  const title = formData.get('title') as string;
-                  const description = formData.get('description') as string;
-                  if (!title) return;
-                  addOptimisticTask({ id: Math.random().toString(), title, description, status: 'Pending', is_sent: false, image_url: imagePreview || undefined, image_urls: imagePreview ? [imagePreview] : [] });
-                  await formAction(formData);
-                  setImagePreview(null);
-                  (document.getElementById('task-form') as HTMLFormElement).reset();
-                }} id="task-form" className="space-y-6">
+                <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">Subject</label>
                     <input name="title" placeholder="Objective..." className="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg font-bold focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" required />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">Narrative (Markdown)</label>
-                    <textarea name="description" placeholder="Technical specifications..." rows={5} className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all resize-none font-mono text-sm leading-relaxed" />
+                    <textarea name="description" placeholder="Specifications..." rows={5} className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all resize-none font-mono text-sm leading-relaxed" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="relative group cursor-pointer bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3 hover:bg-black/60 transition-all overflow-hidden">
-                      <input type="file" name="image" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageChange} />
+                      <input type="file" name="image" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageChange} />
                       {imagePreview && <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-[1px]" />}
                       {isCompressing ? <Loader2 size={18} className="animate-spin text-blue-400" /> : <ImageIcon size={18} className={imagePreview ? 'text-blue-400' : 'text-slate-600'} />}
-                      <span className="text-[10px] font-black uppercase text-slate-500 z-20">{isCompressing ? 'Optimizing...' : (imagePreview ? 'Ready' : 'Add Visuals')}</span>
+                      <span className="text-[10px] font-black uppercase text-slate-500 z-20">{isCompressing ? 'Optimizing...' : (imagePreview ? 'Ready' : 'Add Visual')}</span>
                     </div>
                     <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-center gap-3">
                       <Clock size={18} className="text-slate-600" />
-                      <input type="datetime-local" name="scheduled_at" className="bg-transparent border-none outline-none text-[10px] text-slate-500 font-black w-full" />
+                      <input type="datetime-local" name="scheduled_at" className="bg-transparent border-none outline-none text-[10px] text-slate-500 font-black w-full uppercase" />
                     </div>
                   </div>
-                  <button type="submit" disabled={isPending || isCompressing} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-white shadow-2xl transition-all disabled:opacity-50 flex items-center justify-center gap-3">
-                    <Send size={18} />
+                  <button type="submit" disabled={isPending || isCompressing} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-white shadow-2xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 group">
+                    <Send size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
                     {isPending ? 'DEPLOYING...' : 'INITIATE MISSION'}
                   </button>
                 </form>
@@ -142,48 +174,45 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
           </motion.div>
 
           <div className="lg:col-span-7 space-y-6">
-            <div className="grid grid-cols-1 gap-4">
-              <AnimatePresence mode="popLayout">
-                {optimisticTasks.map((task, idx) => (
-                  <motion.div layout key={task.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: idx * 0.03 }} onClick={() => { setEditingTask(task); setIsSidebarOpen(true); setCurrentImgIdx(0); setIsEditMode(false); }} className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2rem] transition-all duration-500 hover:bg-white/[0.06] relative">
-                    <div className="flex items-start gap-6">
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0 bg-black/40 relative">
-                        {((task.image_urls && task.image_urls.length > 0) || task.image_url) ? (
-                          <>
-                            <img src={task.image_urls?.[0] || task.image_url} className="w-full h-full object-cover" />
-                            {task.image_urls && task.image_urls.length > 1 && (
-                              <div className="absolute top-1 right-1 bg-black/60 p-1 rounded-lg"><Layers size={10} className="text-white" /></div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-600 opacity-20"><FileText size={32} /></div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-black text-xl text-white tracking-tight leading-tight truncate">{task.title}</h3>
-                        <p className="text-slate-500 text-xs line-clamp-2 font-mono mb-4 break-all">{task.description || 'No briefing.'}</p>
-                        <div className="flex items-center gap-4 text-slate-600">
-                          <div className="bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full text-[8px] font-black text-blue-400 uppercase tracking-widest">{task.status}</div>
-                          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider"><ChevronRight size={10} /> View Brief</div>
-                        </div>
+            <AnimatePresence mode="popLayout">
+              {optimisticTasks.map((task, idx) => (
+                <motion.div layout key={task.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: idx * 0.03 }} onClick={() => { setEditingTask(task); setIsSidebarOpen(true); setCurrentImgIdx(0); setIsEditMode(false); }} className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2rem] transition-all duration-500 hover:bg-white/[0.04] relative">
+                  <div className="flex items-start gap-6">
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0 bg-black/40 relative">
+                      {((task.image_urls && task.image_urls.length > 0) || task.image_url) ? (
+                        <>
+                          <img src={task.image_urls?.[0] || task.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                          {task.image_urls && task.image_urls.length > 1 && (
+                            <div className="absolute top-1 right-1 bg-black/60 p-1 rounded-lg"><Layers size={10} className="text-white" /></div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-600 opacity-20"><FileText size={32} /></div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-black text-xl text-white tracking-tight leading-tight truncate">{task.title}</h3>
+                      <p className="text-slate-500 text-xs line-clamp-2 font-mono mb-4 break-all">{task.description || 'No briefing.'}</p>
+                      <div className="flex items-center gap-4 text-slate-600">
+                        <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full text-[8px] font-black text-blue-400 uppercase tracking-widest">{task.status}</div>
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider"><ChevronRight size={10} /> View Brief</div>
                       </div>
                     </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Modal Logic remains same but with type fixes for carousel indicators */}
+        {/* Modal Logic (Same as before but stabilized) */}
         <AnimatePresence>
           {editingTask && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-12 bg-slate-950/95 backdrop-blur-xl overflow-y-auto">
               <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className={`bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[85vh] ${(!editingTask.image_urls || editingTask.image_urls.length === 0) && !editingTask.image_url ? 'md:max-w-3xl' : ''}`}>
-                {/* Image Section */}
                 <AnimatePresence mode="wait">
                   {isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && (
-                    <motion.div key="sidebar" initial={{ width: 0, opacity: 0 }} animate={{ width: '50%', opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="hidden md:flex bg-black/40 items-center justify-center relative group border-r border-white/5 overflow-hidden">
+                    <motion.div key="sidebar" initial={{ width: 0, opacity: 0 }} animate={{ width: '50%', opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: 'spring', damping: 20, stiffness: 100 }} className="hidden md:flex bg-black/40 items-center justify-center relative group border-r border-white/5 overflow-hidden">
                       <div className="w-full h-full relative flex items-center justify-center p-8">
                         <AnimatePresence mode="wait">
                           <motion.img 
@@ -210,7 +239,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                   )}
                 </AnimatePresence>
 
-                {/* Content Section */}
                 <div className={`p-8 md:p-16 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) ? 'md:w-1/2' : 'w-full'}`}>
                   <div className="flex justify-between items-center mb-12">
                     <div className="flex items-center gap-3"><CheckCircle2 size={24} className="text-emerald-500" /><h2 className="text-sm font-black text-slate-500 tracking-[0.3em] uppercase">Intelligence Detail</h2></div>
@@ -233,7 +261,7 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                         <textarea id="edit-desc" defaultValue={editingTask.description} rows={12} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
                       ) : (
                         <div className="prose prose-invert prose-sm max-w-none prose-cyan prose-a:text-cyan-400 font-sans bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-inner overflow-x-hidden break-words cursor-pointer hover:bg-white/[0.04]" onClick={() => setIsEditMode(true)}>
-                          <div className="overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || '*No briefing.*'}</ReactMarkdown></div>
+                          <div className="overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || '*No detailed briefing.*'}</ReactMarkdown></div>
                         </div>
                       )}
                     </div>
