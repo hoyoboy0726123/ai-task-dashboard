@@ -15,37 +15,43 @@ export async function createTaskAction(prevState: any, formData: FormData) {
   try {
     const imageUrls: string[] = [];
     for (const file of imageFiles) {
+      // 確保是有效的 Blob/File 物件
       if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
-        const blob = await put(file.name, file, { access: 'public' });
+        const blob = await put(file.name || 'upload.jpg', file, { access: 'public' });
         imageUrls.push(blob.url);
       }
     }
 
-    // 將陣列轉為 Postgres 支援的 JSON 字串存儲
     const imageUrlsJson = JSON.stringify(imageUrls);
 
+    // 顯式指定欄位，避免順序錯亂
     await sql`
-      INSERT INTO tasks (title, description, image_url, image_urls, scheduled_at, is_sent)
+      INSERT INTO tasks (title, description, image_url, image_urls, status, scheduled_at, is_sent)
       VALUES (
         ${title}, 
         ${description || ''}, 
         ${imageUrls[0] || ''}, 
         ${imageUrlsJson}, 
+        'Pending',
         ${scheduledAt || null}, 
         ${scheduledAt ? false : true}
       )
     `;
 
     if (!scheduledAt) {
-      const message = `🚀 *New Entry with ${imageUrls.length} Media*\n\n📌 *${title}*${imageUrls.length > 0 ? `\n🖼 [View First Photo](${imageUrls[0]})` : ''}`;
+      const message = `🚀 *New Entry Logged*\n\n📌 *${title}*\n${imageUrls.length > 0 ? `🖼 [View Attachment](${imageUrls[0]})` : ''}`;
       await sendTelegramNotification(message);
     }
 
     revalidatePath('/');
     return { success: true };
-  } catch (error) {
-    console.error('Server Action Error:', error);
-    return { success: false, message: 'Failed to create' };
+  } catch (error: any) {
+    console.error('CRITICAL DATABASE ERROR:', error);
+    // 回傳真實錯誤訊息，以便診斷
+    return { 
+      success: false, 
+      message: `Database Error: ${error.message || 'Unknown error'}` 
+    };
   }
 }
 
