@@ -14,7 +14,6 @@ export async function POST(request: Request) {
     const msg = body.message;
     const rawText = msg.text || msg.caption || '';
     
-    // --- 核心修復：正確切分標題與描述 ---
     const lines = rawText.split('\n');
     let title = lines[0].trim();
     const description = lines.slice(1).join('\n').trim();
@@ -34,21 +33,24 @@ export async function POST(request: Request) {
         const filePath = fileData.result.file_path;
         const imageRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`);
         const arrayBuffer = await imageRes.arrayBuffer();
-        // 轉存到 Vercel Blob 以便長期顯示
-        const blob = await put(`tg_${fileId}.jpg`, arrayBuffer, { access: 'public' });
+        
+        // --- 核心修正：加入 addRandomSuffix ---
+        const blob = await put(`tg_${fileId}.jpg`, arrayBuffer, { 
+          access: 'public',
+          addRandomSuffix: true 
+        });
         imageUrl = blob.url;
       }
     }
 
     if (title === '/status') {
-      await sendTelegramNotification(`📊 *Status Update*\n✅ Backend: Stable\n✅ Markdown: Ready\n🖼 Storage: Connected`);
+      await sendTelegramNotification(`📊 *Status Update*\n✅ Storage: Stabilized\n✅ Sync: Online`);
     } else {
-      // --- 核心修復：寫入完整的資料庫欄位 ---
       await sql`
-        INSERT INTO tasks (title, description, image_url, status, is_sent)
-        VALUES (${title || 'New Entry'}, ${description}, ${imageUrl}, 'Pending', TRUE)
+        INSERT INTO tasks (title, description, image_url, image_urls, status, is_sent)
+        VALUES (${title || 'New Entry'}, ${description}, ${imageUrl}, ${JSON.stringify(imageUrl ? [imageUrl] : [])}, 'Pending', TRUE)
       `;
-      await sendTelegramNotification(`✅ *Synced*\n📌 *${title || 'Untitled'}*\n${description ? `📝 _Full Note Logged_` : ''}`);
+      await sendTelegramNotification(`✅ *Synced*\n📌 *${title || 'Untitled'}*`);
     }
 
     return NextResponse.json({ ok: true });
