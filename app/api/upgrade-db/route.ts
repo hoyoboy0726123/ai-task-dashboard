@@ -24,7 +24,15 @@ export async function GET() {
     // 6. 擴充留言表 (加入頭像)
     await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_avatar VARCHAR(10) DEFAULT '👤';`;
 
-    return NextResponse.json({ message: "Infrastructure V3 Ready: Categories and Multi-User Avatars enabled." });
+    // 7. 新增按讚與動態排序欄位
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS likes JSONB DEFAULT '[]';`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`;
+    await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes JSONB DEFAULT '[]';`;
+
+    // 初始化舊貼文的活動時間
+    await sql`UPDATE tasks SET last_activity_at = created_at WHERE last_activity_at IS NULL;`;
+
+    return NextResponse.json({ message: "Infrastructure V4 Ready: Likes and Hot-Ranking enabled." });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Migration failed" }, { status: 500 });

@@ -25,8 +25,8 @@ export async function createTaskAction(prevState: any, formData: FormData) {
     const imageUrlsJson = JSON.stringify(imageUrls);
 
     await sql`
-      INSERT INTO tasks (title, description, image_url, image_urls, author_name, author_avatar, category_id, status, is_sent)
-      VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, ${authorAvatar}, ${parseInt(categoryId)}, 'Pending', TRUE)
+      INSERT INTO tasks (title, description, image_url, image_urls, author_name, author_avatar, category_id, status, is_sent, last_activity_at)
+      VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, ${authorAvatar}, ${parseInt(categoryId)}, 'Pending', TRUE, CURRENT_TIMESTAMP)
     `;
 
     revalidatePath('/');
@@ -87,6 +87,9 @@ export async function addCommentAction(formData: FormData) {
       VALUES (${tid}, ${authorName}, ${authorAvatar}, ${content}, ${pid}, ${JSON.stringify(imageUrls)})
     `;
     
+    // 更新貼文的最後活動時間
+    await sql`UPDATE tasks SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ${tid}`;
+
     revalidatePath('/');
     return { success: true };
   } catch (error: any) { return { success: false, message: error.message }; }
@@ -118,7 +121,8 @@ export async function updateTaskAction(formData: FormData) {
     await sql`
       UPDATE tasks 
       SET title = ${title}, description = ${description}, status = ${status}, 
-          image_urls = ${imageUrlsJson}, image_url = ${imageUrls[0] || ''}
+          image_urls = ${imageUrlsJson}, image_url = ${imageUrls[0] || ''},
+          last_activity_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
     `;
 
@@ -126,5 +130,48 @@ export async function updateTaskAction(formData: FormData) {
     return { success: true };
   } catch (error: any) {
     return { success: false, message: error.message };
+  }
+}
+
+// --- 按讚功能 ---
+export async function toggleLikeAction(id: string | number, type: 'task' | 'comment', user: { name: string, avatar: string }) {
+  try {
+    const table = type === 'task' ? 'tasks' : 'comments';
+    
+    // 獲取目前的按讚名單
+    const result = type === 'task' 
+      ? await sql`SELECT likes FROM tasks WHERE id = ${id as string}`
+      : await sql`SELECT likes FROM comments WHERE id = ${id as number}`;
+    
+    let likes = result.rows[0]?.likes || [];
+    if (!Array.isArray(likes)) likes = [];
+
+    const existingIdx = likes.findIndex((l: any) => l.name === user.name);
+
+    if (existingIdx > -1) {
+      // 取消按讚
+      likes.splice(existingIdx, 1);
+    } else {
+      // 加入按讚
+      likes.push(user);
+    }
+
+    const likesJson = JSON.stringify(likes);
+
+    if (type === 'task') {
+      await sql`UPDATE tasks SET likes = ${likesJson}, last_activity_at = CURRENT_TIMESTAMP WHERE id = ${id as string}`;
+    } else {
+      const comment = await sql`SELECT task_id FROM comments WHERE id = ${id as number}`;
+      await sql`UPDATE comments SET likes = ${likesJson} WHERE id = ${id as number}`;
+      if (comment.rows[0]) {
+        await sql`UPDATE tasks SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ${comment.rows[0].task_id}`;
+      }
+    }
+
+    revalidatePath('/');
+    return { success: true, likes };
+  } catch (e) {
+    console.error(e);
+    return { success: false };
   }
 }

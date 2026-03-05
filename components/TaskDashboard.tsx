@@ -2,7 +2,7 @@
 'use client';
 
 import { useActionState, useOptimistic, useState, useEffect, useRef } from 'react';
-import { createTaskAction, deleteTaskAction, updateTaskAction, addCommentAction, createCategoryAction, deleteCategoryAction } from '@/app/actions';
+import { createTaskAction, deleteTaskAction, updateTaskAction, addCommentAction, createCategoryAction, deleteCategoryAction, toggleLikeAction } from '@/app/actions';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -11,13 +11,13 @@ import imageCompression from 'browser-image-compression';
 import { 
   Send, Image as ImageIcon, Trash2, 
   ChevronRight, ChevronLeft, X, LayoutGrid, 
-  Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers, Edit3, Eye, Loader2, User, MessageSquare, ShieldCheck, CornerDownRight, LogOut, Paperclip, Lock, PlusCircle, Hash
+  Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers, Edit3, Eye, Loader2, User, MessageSquare, ShieldCheck, CornerDownRight, LogOut, Paperclip, Lock, PlusCircle, Hash, Heart
 } from 'lucide-react';
 
 export type Task = { 
   id: string; title: string; description?: string; author_name: string; author_avatar: string;
   status: string; image_url?: string; image_urls?: string[]; category_id: number; is_sent: boolean;
-  comments?: any[];
+  comments?: any[]; likes?: any[]; last_activity_at?: string;
 };
 
 const DEFAULT_AVATARS = ['👤', '🤖', '🦊', '🐱', '🐼', '🐲', '🚀', '⭐', '💎', '🔥'];
@@ -212,7 +212,14 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     input.value = ''; setReplyTo(null); setCommentImagePreviews([]); setCommentCompressedFiles([]);
   };
 
-  const filteredTasks = optimisticTasks.filter(t => t.category_id === selectedCategoryId);
+  const handleToggleLike = async (id: string | number, type: 'task' | 'comment') => {
+    if (!currentUser) return;
+    await toggleLikeAction(id, type, { name: currentUser, avatar: currentAvatar });
+  };
+
+  const filteredTasks = optimisticTasks
+    .filter(t => t.category_id === selectedCategoryId)
+    .sort((a, b) => new Date(b.last_activity_at || 0).getTime() - new Date(a.last_activity_at || 0).getTime());
 
   const renderComments = (comments: any[], parentId: any = null, depth = 0) => {
     return comments.filter(c => c.parent_id == parentId).map(c => (
@@ -234,6 +241,23 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
               ))}
             </div>
           )}
+          <div className="flex items-center gap-3 mt-2">
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleToggleLike(c.id, 'comment'); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all ${c.likes?.some((l: any) => l.name === currentUser) ? 'bg-pink-500/20 text-pink-500' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+            >
+              <Heart size={12} fill={c.likes?.some((l: any) => l.name === currentUser) ? 'currentColor' : 'none'} />
+              <span className="text-[10px] font-black">{c.likes?.length || 0}</span>
+            </button>
+            {c.likes && c.likes.length > 0 && (
+              <div className="flex -space-x-2">
+                {c.likes.slice(0, 5).map((l: any, i: number) => (
+                  <div key={i} title={l.name} className="w-5 h-5 rounded-full bg-slate-800 border border-slate-900 flex items-center justify-center text-[10px] shadow-sm">{l.avatar}</div>
+                ))}
+                {c.likes.length > 5 && <div className="w-5 h-5 rounded-full bg-slate-700 border border-slate-900 flex items-center justify-center text-[8px] text-white">+{c.likes.length - 5}</div>}
+              </div>
+            )}
+          </div>
         </div>
         {renderComments(comments, c.id, depth + 1)}
       </div>
@@ -358,12 +382,34 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                     <div>
                       <div className="flex justify-between items-start mb-3 gap-4">
                         <h3 className="font-black text-2xl text-white tracking-tight leading-tight line-clamp-2">{task.title}</h3>
-                        <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5 flex-shrink-0 shadow-sm">
-                          <span className="text-[14px]">{task.author_avatar}</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{task.author_name}</span>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5 flex-shrink-0 shadow-sm">
+                            <span className="text-[14px]">{task.author_avatar}</span>
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${task.author_name === 'Admin' ? 'text-yellow-500' : 'text-slate-400'}`}>{task.author_name}</span>
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleToggleLike(task.id, 'task'); }}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all ${task.likes?.some((l: any) => l.name === currentUser) ? 'bg-pink-500/20 text-pink-500' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                          >
+                            <Heart size={10} fill={task.likes?.some((l: any) => l.name === currentUser) ? 'currentColor' : 'none'} />
+                            <span className="text-[9px] font-black">{task.likes?.length || 0}</span>
+                          </button>
                         </div>
                       </div>
-                      <p className="text-slate-500 text-sm line-clamp-3 font-mono leading-relaxed">{task.description || '無詳細說明資料。'}</p>
+                      <p className="text-slate-500 text-sm line-clamp-3 font-mono leading-relaxed mb-4">{task.description || '無詳細說明資料。'}</p>
+                      
+                      {task.likes && task.likes.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex -space-x-2">
+                            {task.likes.slice(0, 3).map((l: any, i: number) => (
+                              <div key={i} title={l.name} className="w-6 h-6 rounded-full bg-slate-800 border-2 border-slate-950 flex items-center justify-center text-xs shadow-lg">{l.avatar}</div>
+                            ))}
+                          </div>
+                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">
+                            {task.likes[0].name}{task.likes.length > 1 ? ` and ${task.likes.length - 1} others` : ' liked this'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 ))}
