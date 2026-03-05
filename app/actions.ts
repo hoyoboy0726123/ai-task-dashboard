@@ -9,38 +9,31 @@ import { revalidatePath } from 'next/cache';
 export async function createTaskAction(prevState: any, formData: FormData) {
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const authorName = formData.get('author_name') as string || 'Guest'; // 從隱藏欄位或 Session 取得
+  const authorName = formData.get('author_name') as string || 'Guest';
   const imageFiles = formData.getAll('image') as any[];
 
   try {
     const imageUrls: string[] = [];
     for (const file of imageFiles) {
       if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
-        const blob = await put(file.name || 'upload.jpg', file, { 
-          access: 'public',
-          addRandomSuffix: true 
-        });
+        const blob = await put(file.name || 'upload.jpg', file, { access: 'public', addRandomSuffix: true });
         imageUrls.push(blob.url);
       }
     }
-
     const imageUrlsJson = JSON.stringify(imageUrls);
 
-    // 寫入資料庫 (加入 author_name)
     await sql`
       INSERT INTO tasks (title, description, image_url, image_urls, author_name, status, is_sent)
       VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, 'Pending', TRUE)
     `;
 
-    // 立即通知 Telegram
-    const message = `🚀 *New Deployment by ${authorName}*\n\n📌 *${title}*${imageUrls.length > 0 ? `\n🖼 [View Attachment](${imageUrls[0]})` : ''}`;
+    const message = `🚀 *New Entry by ${authorName}*\n\n📌 *${title}*`;
     await sendTelegramNotification(message);
 
     revalidatePath('/');
     return { success: true };
   } catch (error: any) {
-    console.error('Action Error:', error);
-    return { success: false, message: `System Error: ${error.message}` };
+    return { success: false, message: error.message };
   }
 }
 
@@ -60,17 +53,22 @@ export async function updateTaskAction(id: string, title: string, description: s
   } catch (error) { return { success: false }; }
 }
 
-// --- 新增：處理留言 ---
+// --- 修正後的留言邏輯 ---
 export async function addCommentAction(taskId: string, authorName: string, content: string, parentId: string | null = null) {
   try {
+    // 強制轉換 taskId 為整數，並處理 parentId
+    const pid = parentId ? parseInt(parentId) : null;
+    const tid = parseInt(taskId);
+
     await sql`
       INSERT INTO comments (task_id, author_name, content, parent_id)
-      VALUES (${taskId}, ${authorName}, ${content}, ${parentId})
+      VALUES (${tid}, ${authorName}, ${content}, ${pid})
     `;
+    
     revalidatePath('/');
     return { success: true };
-  } catch (error) {
-    console.error(error);
-    return { success: false };
+  } catch (error: any) {
+    console.error('Comment Error:', error);
+    return { success: false, message: error.message };
   }
 }
