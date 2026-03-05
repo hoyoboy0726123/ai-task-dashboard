@@ -27,9 +27,6 @@ export async function createTaskAction(prevState: any, formData: FormData) {
       VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, 'Pending', TRUE)
     `;
 
-    const message = `🚀 *New Entry by ${authorName}*\n\n📌 *${title}*`;
-    await sendTelegramNotification(message);
-
     revalidatePath('/');
     return { success: true };
   } catch (error: any) {
@@ -53,16 +50,32 @@ export async function updateTaskAction(id: string, title: string, description: s
   } catch (error) { return { success: false }; }
 }
 
-// --- 修正後的留言邏輯 ---
-export async function addCommentAction(taskId: string, authorName: string, content: string, parentId: string | null = null) {
+// --- 強化：支援多圖上傳的留言 Actions ---
+export async function addCommentAction(formData: FormData) {
+  const taskId = formData.get('task_id') as string;
+  const authorName = formData.get('author_name') as string;
+  const content = formData.get('content') as string;
+  const parentId = formData.get('parent_id') as string;
+  const imageFiles = formData.getAll('comment_images') as any[];
+
   try {
-    // 強制轉換 taskId 為整數，並處理 parentId
-    const pid = parentId ? parseInt(parentId) : null;
+    const imageUrls: string[] = [];
+    // 限制最多 3 張圖片
+    const filesToUpload = imageFiles.slice(0, 3);
+    
+    for (const file of filesToUpload) {
+      if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
+        const blob = await put(file.name || 'comment.jpg', file, { access: 'public', addRandomSuffix: true });
+        imageUrls.push(blob.url);
+      }
+    }
+
     const tid = parseInt(taskId);
+    const pid = parentId && parentId !== 'null' ? parseInt(parentId) : null;
 
     await sql`
-      INSERT INTO comments (task_id, author_name, content, parent_id)
-      VALUES (${tid}, ${authorName}, ${content}, ${pid})
+      INSERT INTO comments (task_id, author_name, content, parent_id, image_urls)
+      VALUES (${tid}, ${authorName}, ${content}, ${pid}, ${JSON.stringify(imageUrls)})
     `;
     
     revalidatePath('/');
