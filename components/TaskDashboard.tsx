@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import imageCompression from 'browser-image-compression';
 import { 
   Send, Image as ImageIcon, Trash2, 
-  ChevronRight, ChevronLeft, X, LayoutGrid, 
+  ChevronRight, ChevronLeft, X, ExternalLink, LayoutGrid, 
   Activity, CheckCircle2, FileText, Maximize2, Minimize2, Layers, Edit3, Eye, Loader2, User, MessageSquare, ShieldCheck, CornerDownRight, LogOut, Paperclip
 } from 'lucide-react';
 
@@ -51,6 +51,18 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
   }, []);
 
   const isAdmin = currentUser === 'Admin0726';
+
+  // --- 修正：補回漏掉的 handleAuth 函數 ---
+  const handleAuth = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get('username') as string;
+    if (name) {
+      localStorage.setItem('task_user', name);
+      setCurrentUser(name);
+      setShowAuth(false);
+    }
+  };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>, isComment = false) => {
     const files = e.target.files;
@@ -93,7 +105,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
     formData.append('parent_id', replyTo?.id || 'null');
     commentCompressedFiles.forEach(f => formData.append('comment_images', f));
 
-    // 樂觀更新 Modal 內的留言列表
     const newComment = {
       id: Math.random().toString(),
       author_name: currentUser,
@@ -116,23 +127,24 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
     setCommentCompressedFiles([]);
   };
 
-  // --- 樹狀留言渲染邏輯 ---
   const renderComments = (comments: any[], parentId: any = null, depth = 0) => {
     return comments
       .filter(c => c.parent_id == parentId)
       .map(c => (
-        <div key={c.id} className={`${depth > 0 ? 'ml-8 md:ml-12 border-l border-white/5 pl-4 md:pl-6' : ''} space-y-4`}>
-          <div className="bg-white/[0.02] p-5 rounded-[2rem] border border-white/5 relative group">
+        <div key={c.id} className={`${depth > 0 ? 'ml-8 md:ml-12 border-l border-white/10 pl-4 md:pl-6' : ''} space-y-4`}>
+          <div className="bg-white/[0.03] p-5 rounded-[2rem] border border-white/5 relative group shadow-sm">
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2">
                 {c.author_name === 'Admin0726' ? <ShieldCheck size={14} className="text-yellow-500" /> : <User size={14} className="text-blue-400" />}
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">{c.author_name}</span>
               </div>
-              <button onClick={() => setReplyTo(c)} className="text-[8px] font-black text-slate-600 hover:text-blue-400 uppercase flex items-center gap-1"><CornerDownRight size={10} /> 回覆</button>
+              <button onClick={() => {
+                setReplyTo(c);
+                document.getElementById('comment-input')?.focus();
+              }} className="text-[8px] font-black text-slate-600 hover:text-blue-400 uppercase flex items-center gap-1 transition-colors"><CornerDownRight size={10} /> 回覆</button>
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed mb-4">{c.content}</p>
+            <p className="text-sm text-slate-400 leading-relaxed mb-4 whitespace-pre-wrap">{c.content}</p>
             
-            {/* 留言圖片 */}
             {c.image_urls && c.image_urls.length > 0 && (
               <div className="flex gap-2 mb-2 overflow-x-auto pb-2 custom-scrollbar">
                 {c.image_urls.map((url: string, i: number) => (
@@ -141,7 +153,6 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
               </div>
             )}
           </div>
-          {/* 遞迴渲染子留言 */}
           {renderComments(comments, c.id, depth + 1)}
         </div>
       ));
@@ -149,10 +160,9 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-blue-500/30 font-sans">
-      {/* Background decor... */}
+      
       <div className="fixed inset-0 pointer-events-none opacity-20"><div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[150px] animate-pulse" /><div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 blur-[150px]" /></div>
 
-      {/* Auth Modal... */}
       <AnimatePresence>{showAuth && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-2xl p-6">
           <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900 border border-white/10 p-10 rounded-[3.5rem] w-full max-w-md shadow-2xl text-center">
@@ -221,27 +231,25 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
           </div>
         </div>
 
-        {/* 詳情與樹狀留言視窗 */}
+        {/* 詳情視窗 */}
         <AnimatePresence>
           {editingTask && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-12 bg-slate-950/95 backdrop-blur-2xl overflow-y-auto">
-              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[90vh]">
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} className={`bg-slate-900/50 border border-white/10 w-full max-w-6xl rounded-[4rem] shadow-2xl flex flex-col md:flex-row overflow-hidden h-full max-h-[90vh] ${(!editingTask.image_urls || editingTask.image_urls.length === 0) && !editingTask.image_url ? 'md:max-w-3xl' : ''}`}>
                 
-                {/* 圖片輪播側邊欄 */}
                 <AnimatePresence mode="wait">
                   {isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && (
                     <motion.div key="sidebar" initial={{ width: 0 }} animate={{ width: '50%' }} exit={{ width: 0 }} className="hidden md:flex bg-black/40 items-center justify-center relative border-r border-white/5 overflow-hidden p-12">
                       <div className="w-full h-full relative flex items-center justify-center">
                         <motion.img key={currentImgIdx} src={editingTask.image_urls?.[currentImgIdx] || editingTask.image_url} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full object-contain drop-shadow-2xl cursor-zoom-in" onClick={() => setFullscreenImage(editingTask.image_urls?.[currentImgIdx] || editingTask.image_url!)} />
                         {editingTask.image_urls && editingTask.image_urls.length > 1 && (
-                          <div className="absolute bottom-6 flex gap-2">{editingTask.image_urls.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full ${i === currentImgIdx ? 'bg-blue-500 w-6' : 'bg-white/20'}`} />)}</div>
+                          <div className="absolute bottom-6 flex gap-2">{editingTask.image_urls.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === currentImgIdx ? 'bg-blue-500 w-6' : 'bg-white/20'}`} />)}</div>
                         )}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* 內容與留言板 */}
                 <div className={`p-10 md:p-20 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) ? 'md:w-1/2' : 'w-full'}`}>
                   <div className="flex justify-between items-center mb-16">
                     <div className="flex items-center gap-4"><CheckCircle2 size={28} className="text-blue-500" /><h2 className="text-xs font-black text-slate-500 tracking-[0.4em] uppercase">任務情資詳情</h2></div>
@@ -262,11 +270,9 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                       {isEditMode ? <textarea id="edit-desc" defaultValue={editingTask.description} rows={12} className="w-full bg-white/5 border border-white/10 rounded-[2.5rem] p-10 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" /> : <div className="prose prose-invert prose-sm max-w-none prose-blue font-sans bg-white/[0.02] p-10 rounded-[3rem] border border-white/5 overflow-x-hidden break-words"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || ''}</ReactMarkdown></div>}
                     </div>
 
-                    {/* --- 改進的樹狀留言系統 --- */}
                     <div className="pt-16 border-t border-white/5 space-y-12">
                       <div className="flex items-center gap-4"><MessageSquare size={22} className="text-blue-500" /><h3 className="text-sm font-black text-white uppercase tracking-[0.3em]">通訊紀錄 (COMMS)</h3></div>
                       
-                      {/* 留言/回覆 輸入區 */}
                       <div className="bg-white/[0.03] border border-white/5 p-8 rounded-[3rem] space-y-6 shadow-inner relative overflow-hidden">
                         {replyTo && <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-2"><CornerDownRight size={12} /> 正在回覆 {replyTo.author_name}</div>}
                         <textarea id="comment-input" placeholder="輸入情報..." className="w-full bg-transparent outline-none text-sm font-mono leading-relaxed" rows={3} />
@@ -287,15 +293,12 @@ export default function TaskDashboard({ initialTasks }: { initialTasks: Task[] }
                           </div>
                           <div className="flex gap-4 items-center">
                             {replyTo && <button onClick={() => setReplyTo(null)} className="text-[10px] text-red-400 font-bold uppercase">取消</button>}
-                            <button onClick={handlePostComment} disabled={isCommentCompressing} className="bg-white text-black px-10 py-3 rounded-2xl text-xs font-black uppercase hover:bg-blue-500 hover:text-white transition-all shadow-lg">{isCommentCompressing ? '處理中...' : '發送'}</button>
+                            <button onClick={handlePostComment} disabled={isCommentCompressing} className="bg-white text-black px-10 py-3 rounded-2xl text-xs font-black uppercase shadow-lg">{isCommentCompressing ? '處理中...' : '發送'}</button>
                           </div>
                         </div>
                       </div>
 
-                      {/* 樹狀顯示 */}
-                      <div className="space-y-8 pb-20">
-                        {renderComments(editingTask.comments || [])}
-                      </div>
+                      <div className="space-y-8 pb-20">{renderComments(editingTask.comments || [])}</div>
                     </div>
                   </div>
 
