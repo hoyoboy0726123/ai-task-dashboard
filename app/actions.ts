@@ -9,7 +9,9 @@ import { revalidatePath } from 'next/cache';
 export async function createTaskAction(prevState: any, formData: FormData) {
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const authorName = formData.get('author_name') as string || 'Guest';
+  const authorName = formData.get('author_name') as string;
+  const authorAvatar = formData.get('author_avatar') as string;
+  const categoryId = formData.get('category_id') as string;
   const imageFiles = formData.getAll('image') as any[];
 
   try {
@@ -23,8 +25,8 @@ export async function createTaskAction(prevState: any, formData: FormData) {
     const imageUrlsJson = JSON.stringify(imageUrls);
 
     await sql`
-      INSERT INTO tasks (title, description, image_url, image_urls, author_name, status, is_sent)
-      VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, 'Pending', TRUE)
+      INSERT INTO tasks (title, description, image_url, image_urls, author_name, author_avatar, category_id, status, is_sent)
+      VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, ${authorAvatar}, ${parseInt(categoryId)}, 'Pending', TRUE)
     `;
 
     revalidatePath('/');
@@ -34,36 +36,43 @@ export async function createTaskAction(prevState: any, formData: FormData) {
   }
 }
 
-export async function deleteTaskAction(id: string) {
+// --- 討論區管理 ---
+export async function createCategoryAction(name: string) {
   try {
-    await sql`DELETE FROM tasks WHERE id = ${id}`;
+    await sql`INSERT INTO categories (name) VALUES (${name})`;
     revalidatePath('/');
     return { success: true };
-  } catch (error) { return { success: false }; }
+  } catch (e) { return { success: false }; }
 }
 
-export async function updateTaskAction(id: string, title: string, description: string, status: string) {
+export async function deleteCategoryAction(id: number) {
   try {
-    await sql`UPDATE tasks SET title = ${title}, description = ${description}, status = ${status} WHERE id = ${id}`;
+    await sql`DELETE FROM categories WHERE id = ${id}`;
     revalidatePath('/');
     return { success: true };
-  } catch (error) { return { success: false }; }
+  } catch (e) { return { success: false }; }
 }
 
-// --- 強化：支援多圖上傳的留言 Actions ---
+export async function updateCategoryAction(id: number, name: string) {
+  try {
+    await sql`UPDATE categories SET name = ${name} WHERE id = ${id}`;
+    revalidatePath('/');
+    return { success: true };
+  } catch (e) { return { success: false }; }
+}
+
+// --- 留言管理 (加入頭像) ---
 export async function addCommentAction(formData: FormData) {
   const taskId = formData.get('task_id') as string;
   const authorName = formData.get('author_name') as string;
+  const authorAvatar = formData.get('author_avatar') as string;
   const content = formData.get('content') as string;
   const parentId = formData.get('parent_id') as string;
   const imageFiles = formData.getAll('comment_images') as any[];
 
   try {
     const imageUrls: string[] = [];
-    // 限制最多 3 張圖片
-    const filesToUpload = imageFiles.slice(0, 3);
-    
-    for (const file of filesToUpload) {
+    for (const file of imageFiles.slice(0, 3)) {
       if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
         const blob = await put(file.name || 'comment.jpg', file, { access: 'public', addRandomSuffix: true });
         imageUrls.push(blob.url);
@@ -74,14 +83,21 @@ export async function addCommentAction(formData: FormData) {
     const pid = parentId && parentId !== 'null' ? parseInt(parentId) : null;
 
     await sql`
-      INSERT INTO comments (task_id, author_name, content, parent_id, image_urls)
-      VALUES (${tid}, ${authorName}, ${content}, ${pid}, ${JSON.stringify(imageUrls)})
+      INSERT INTO comments (task_id, author_name, author_avatar, content, parent_id, image_urls)
+      VALUES (${tid}, ${authorName}, ${authorAvatar}, ${content}, ${pid}, ${JSON.stringify(imageUrls)})
     `;
     
     revalidatePath('/');
     return { success: true };
-  } catch (error: any) {
-    console.error('Comment Error:', error);
-    return { success: false, message: error.message };
-  }
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+export async function deleteTaskAction(id: string) {
+  await sql`DELETE FROM tasks WHERE id = ${id}`;
+  revalidatePath('/');
+}
+
+export async function updateTaskAction(id: string, title: string, description: string, status: string) {
+  await sql`UPDATE tasks SET title = ${title}, description = ${description}, status = ${status} WHERE id = ${id}`;
+  revalidatePath('/');
 }

@@ -6,12 +6,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   let tasks: Task[] = [];
+  let categories: any[] = [];
 
   try {
-    // 抓取所有任務與發布者名稱
+    const { rows: catRows } = await sql`SELECT * FROM categories ORDER BY id ASC`;
+    categories = catRows;
+
     const { rows: taskRows } = await sql`SELECT * FROM tasks ORDER BY id DESC`;
-    
-    // 抓取所有留言
     const { rows: commentRows } = await sql`SELECT * FROM comments ORDER BY created_at ASC`;
 
     tasks = taskRows.map((row): Task => {
@@ -25,21 +26,22 @@ export default async function Home() {
         title: String(row.title || 'Untitled'),
         description: String(row.description || ''),
         author_name: String(row.author_name || 'Guest'),
+        author_avatar: String(row.author_avatar || '👤'),
+        category_id: row.category_id,
         status: String(row.status || 'Pending'),
         image_url: row.image_url || undefined,
         image_urls: urls,
         is_sent: Boolean(row.is_sent),
-        comments: commentRows.filter(c => String(c.task_id) === String(row.id)) // 關聯留言
+        comments: commentRows.filter(c => String(c.task_id) === String(row.id))
       };
     });
   } catch (error) {
     console.error('Fetch Error:', error);
-    tasks = [];
   }
 
   return (
     <main>
-      <TaskDashboard initialTasks={tasks} />
+      <TaskDashboard initialTasks={tasks} categories={categories} />
     </main>
   );
 }
