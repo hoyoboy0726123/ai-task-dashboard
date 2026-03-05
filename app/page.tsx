@@ -8,33 +8,32 @@ export default async function Home() {
   let tasks: Task[] = [];
 
   try {
-    const { rows } = await sql`SELECT * FROM tasks ORDER BY id DESC`;
+    // 抓取所有任務與發布者名稱
+    const { rows: taskRows } = await sql`SELECT * FROM tasks ORDER BY id DESC`;
     
-    tasks = rows.map((row): Task => {
+    // 抓取所有留言
+    const { rows: commentRows } = await sql`SELECT * FROM comments ORDER BY created_at ASC`;
+
+    tasks = taskRows.map((row): Task => {
       let urls: string[] = [];
       try {
-        if (typeof row.image_urls === 'string') {
-          urls = JSON.parse(row.image_urls);
-        } else if (Array.isArray(row.image_urls)) {
-          urls = row.image_urls;
-        }
-      } catch (e) {
-        urls = row.image_url ? [String(row.image_url)] : [];
-      }
+        urls = Array.isArray(row.image_urls) ? row.image_urls : JSON.parse(row.image_urls || '[]');
+      } catch (e) { urls = row.image_url ? [row.image_url] : []; }
 
       return {
         id: String(row.id),
         title: String(row.title || 'Untitled'),
         description: String(row.description || ''),
+        author_name: String(row.author_name || 'Guest'),
         status: String(row.status || 'Pending'),
-        image_url: row.image_url ? String(row.image_url) : undefined,
+        image_url: row.image_url || undefined,
         image_urls: urls,
-        scheduled_at: row.scheduled_at ? new Date(row.scheduled_at).toISOString() : undefined,
-        is_sent: Boolean(row.is_sent)
+        is_sent: Boolean(row.is_sent),
+        comments: commentRows.filter(c => String(c.task_id) === String(row.id)) // 關聯留言
       };
     });
   } catch (error) {
-    console.error('Failed to fetch tasks:', error);
+    console.error('Fetch Error:', error);
     tasks = [];
   }
 

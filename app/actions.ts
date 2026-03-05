@@ -9,17 +9,16 @@ import { revalidatePath } from 'next/cache';
 export async function createTaskAction(prevState: any, formData: FormData) {
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const scheduledAt = formData.get('scheduled_at') as string;
+  const authorName = formData.get('author_name') as string || 'Guest'; // 從隱藏欄位或 Session 取得
   const imageFiles = formData.getAll('image') as any[];
 
   try {
     const imageUrls: string[] = [];
     for (const file of imageFiles) {
       if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
-        // --- 核心修正：加入 addRandomSuffix 防止命名衝突 ---
         const blob = await put(file.name || 'upload.jpg', file, { 
           access: 'public',
-          addRandomSuffix: true // 允許系統自動產生唯一檔名
+          addRandomSuffix: true 
         });
         imageUrls.push(blob.url);
       }
@@ -27,32 +26,21 @@ export async function createTaskAction(prevState: any, formData: FormData) {
 
     const imageUrlsJson = JSON.stringify(imageUrls);
 
+    // 寫入資料庫 (加入 author_name)
     await sql`
-      INSERT INTO tasks (title, description, image_url, image_urls, status, scheduled_at, is_sent)
-      VALUES (
-        ${title}, 
-        ${description || ''}, 
-        ${imageUrls[0] || ''}, 
-        ${imageUrlsJson}, 
-        'Pending',
-        ${scheduledAt || null}, 
-        ${scheduledAt ? false : true}
-      )
+      INSERT INTO tasks (title, description, image_url, image_urls, author_name, status, is_sent)
+      VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, 'Pending', TRUE)
     `;
 
-    if (!scheduledAt) {
-      const message = `🚀 *New Entry Logged*\n\n📌 *${title}*${imageUrls.length > 0 ? `\n🖼 [View Attachment](${imageUrls[0]})` : ''}`;
-      await sendTelegramNotification(message);
-    }
+    // 立即通知 Telegram
+    const message = `🚀 *New Deployment by ${authorName}*\n\n📌 *${title}*${imageUrls.length > 0 ? `\n🖼 [View Attachment](${imageUrls[0]})` : ''}`;
+    await sendTelegramNotification(message);
 
     revalidatePath('/');
     return { success: true };
   } catch (error: any) {
-    console.error('CRITICAL DATABASE ERROR:', error);
-    return { 
-      success: false, 
-      message: `Database Error: ${error.message || 'Unknown error'}` 
-    };
+    console.error('Action Error:', error);
+    return { success: false, message: `System Error: ${error.message}` };
   }
 }
 
@@ -70,4 +58,19 @@ export async function updateTaskAction(id: string, title: string, description: s
     revalidatePath('/');
     return { success: true };
   } catch (error) { return { success: false }; }
+}
+
+// --- 新增：處理留言 ---
+export async function addCommentAction(taskId: string, authorName: string, content: string, parentId: string | null = null) {
+  try {
+    await sql`
+      INSERT INTO comments (task_id, author_name, content, parent_id)
+      VALUES (${taskId}, ${authorName}, ${content}, ${parentId})
+    `;
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    return { success: false };
+  }
 }

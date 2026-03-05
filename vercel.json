@@ -1,8 +1,5 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/send-tasks",
-      "schedule": "0 0 * * *"
-    }
-  ]
+  "github": {
+    "silent": true
+  }
 }
