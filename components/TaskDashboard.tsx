@@ -42,14 +42,14 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
   const [commentImagePreviews, setCommentImagePreviews] = useState<string[]>([]);
   const [commentCompressedFiles, setCommentCompressedFiles] = useState<File[]>([]);
   const [isCommentCompressing, setIsCommentCompressing] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  // 初始化選取第一個分類
   useEffect(() => {
     if (categories.length > 0 && selectedCategoryId === null) {
       const workShowcase = categories.find(c => c.name === '作品發表區');
       setSelectedCategoryId(workShowcase ? workShowcase.id : categories[0].id);
     }
-  }, [categories]);
+  }, [categories, selectedCategoryId]);
 
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
     initialTasks,
@@ -98,6 +98,39 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     } finally { setIsCommentCompressing(false); setIsCompressing(false); }
   };
 
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    if (!title || !selectedCategoryId) return;
+
+    formData.append('author_name', currentUser!);
+    formData.append('author_avatar', currentAvatar);
+    formData.append('category_id', selectedCategoryId.toString());
+    
+    formData.delete('image');
+    compressedFiles.forEach(file => formData.append('image', file));
+
+    addOptimisticTask({ 
+      id: Math.random().toString(), 
+      title, 
+      description, 
+      author_name: currentUser!,
+      author_avatar: currentAvatar,
+      category_id: selectedCategoryId,
+      status: 'Pending', 
+      is_sent: false, 
+      image_url: imagePreviews[0] || undefined,
+      image_urls: imagePreviews
+    });
+
+    await formAction(formData);
+    setImagePreviews([]);
+    setCompressedFiles([]);
+    formRef.current?.reset();
+  };
+
   const handlePostComment = async () => {
     const input = document.getElementById('comment-input') as HTMLTextAreaElement;
     if (!input || !input.value || !editingTask) return;
@@ -120,7 +153,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
   const renderComments = (comments: any[], parentId: any = null, depth = 0) => {
     return comments.filter(c => c.parent_id == parentId).map(c => (
-      <div key={c.id} className={`${depth > 0 ? 'ml-8 md:ml-12 border-l border-white/5 pl-4 md:pl-6' : ''} space-y-4`}>
+      <div key={c.id} className={`${depth > 0 ? 'ml-8 md:ml-12 border-l border-white/10 pl-4 md:pl-6' : ''} space-y-4`}>
         <div className="bg-white/[0.03] p-5 rounded-[2rem] border border-white/5 relative group">
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
@@ -151,11 +184,11 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
       <AnimatePresence>
         {showAuth && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900 border border-white/10 p-10 rounded-[3.5rem] w-full max-w-md shadow-2xl">
-              <h2 className="text-3xl font-black mb-8 italic text-center">INITIALIZE ACCESS</h2>
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900 border border-white/10 p-10 rounded-[3.5rem] w-full max-md shadow-2xl">
+              <h2 className="text-3xl font-black mb-8 italic text-center uppercase tracking-tighter">Initialize Access</h2>
               <form onSubmit={handleAuth} className="space-y-6">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase text-center block">Select Avatar</label>
+                  <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase text-center block">選擇頭像 (Select Avatar)</label>
                   <div className="grid grid-cols-5 gap-3">
                     {DEFAULT_AVATARS.map(emoji => (
                       <button key={emoji} type="button" onClick={() => setCurrentAvatar(emoji)} className={`text-2xl p-2 rounded-xl transition-all ${currentAvatar === emoji ? 'bg-blue-600 scale-110 shadow-lg' : 'bg-white/5 hover:bg-white/10'}`}>{emoji}</button>
@@ -164,12 +197,11 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                   <input type="hidden" name="avatar" value={currentAvatar} />
                 </div>
                 <div className="space-y-4">
-                  <input name="username" placeholder="Codename..." onChange={(e) => { if(e.target.value === 'Admin') setAuthError('需要管理員授權'); else setAuthError(''); }} className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-center text-lg font-bold outline-none" required />
+                  <input name="username" placeholder="輸入名稱 (Codename)..." onChange={(e) => { if(e.target.value === 'Admin') setAuthError('需要管理員授權'); else setAuthError(''); }} className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-center text-lg font-bold outline-none transition-all" required />
                   <AnimatePresence>
                     {authError === '需要管理員授權' && (
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="space-y-4 overflow-hidden">
-                        <div className="flex items-center gap-2 text-yellow-500 text-[10px] font-black uppercase tracking-widest justify-center"><Lock size={12} /> Administrator Verification Required</div>
-                        <input name="password" type="password" placeholder="Access Key..." className="w-full bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-6 py-4 text-center text-lg font-bold outline-none text-yellow-500" required />
+                        <input name="password" type="password" placeholder="輸入密碼 (Access Key)..." className="w-full bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-6 py-4 text-center text-lg font-bold outline-none text-yellow-500" required />
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -187,7 +219,6 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           
-          {/* 左側邊欄：輸入與討論區 */}
           <div className="lg:col-span-4 space-y-8">
             <motion.header initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
               <h1 className="text-5xl font-black italic text-shadow-glow leading-none">AI COMMAND</h1>
@@ -195,39 +226,33 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
             </motion.header>
 
             <div className="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-2xl shadow-2xl space-y-6">
-              <form action={async (formData) => {
-                const title = formData.get('title') as string;
-                if (!title || !selectedCategoryId) return;
-                formData.append('author_name', currentUser!);
-                formData.append('author_avatar', currentAvatar);
-                formData.append('category_id', selectedCategoryId.toString());
-                formData.delete('image');
-                compressedFiles.forEach(f => formData.append('image', f));
-                addOptimisticTask({ id: Math.random().toString(), title, description: formData.get('description') as string, author_name: currentUser!, author_avatar: currentAvatar, category_id: selectedCategoryId, status: 'Active', is_sent: false, image_url: imagePreviews[0], image_urls: imagePreviews });
-                await formAction(formData);
-                setImagePreviews([]); setCompressedFiles([]); (document.getElementById('task-form') as HTMLFormElement).reset();
-              }} id="task-form" className="space-y-6">
-                <input name="title" placeholder="Objective Headline..." className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-lg font-bold outline-none" required />
-                <textarea name="description" placeholder="Intel log (Markdown)..." rows={4} className="w-full bg-black/20 border border-white/10 rounded-2xl px-6 py-4 outline-none resize-none text-sm font-mono" />
-                <div className="relative cursor-pointer bg-black/40 border border-white/10 rounded-2xl p-4 flex items-center justify-center gap-3 overflow-hidden">
+              <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">主題名稱</label>
+                  <input name="title" placeholder="輸入主題..." className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-lg font-bold outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">貼文內容 (Markdown)</label>
+                  <textarea name="description" placeholder="輸入詳細內容..." rows={4} className="w-full bg-black/20 border border-white/10 rounded-2xl px-6 py-4 outline-none resize-none text-sm font-mono leading-relaxed focus:ring-2 focus:ring-blue-500/50 transition-all" />
+                </div>
+                <div className="relative cursor-pointer bg-black/40 border border-white/10 rounded-2xl p-4 flex items-center justify-center gap-3 overflow-hidden group hover:bg-black/60 transition-all">
                   <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageChange} />
                   {imagePreviews.length > 0 && <img src={imagePreviews[0]} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-[1px]" />}
                   {isCompressing ? <Loader2 className="animate-spin text-blue-400" /> : <ImageIcon size={18} className={imagePreviews.length > 0 ? 'text-blue-400' : 'text-slate-600'} />}
-                  <span className="text-[10px] font-black uppercase text-slate-500 z-20">{imagePreviews.length > 0 ? `${imagePreviews.length} Media Ready` : 'Add Media'}</span>
+                  <span className="text-[10px] font-black uppercase text-slate-500 z-20">{isCompressing ? '優化中...' : (imagePreviews.length > 0 ? `已附加 ${imagePreviews.length} 張媒體` : '添加圖片')}</span>
                 </div>
-                <button type="submit" disabled={isPending || isCompressing} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-3xl font-black shadow-xl">DEPLOY MISSION</button>
+                <button type="submit" disabled={isPending || isCompressing} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-3xl font-black shadow-xl transition-all active:scale-95">發布任務 (DEPLOY)</button>
               </form>
             </div>
 
-            {/* 討論區導覽 */}
             <div className="space-y-4 pt-4">
               <div className="flex items-center justify-between px-4">
-                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sector Navigation</h3>
-                {isAdmin && <button onClick={async () => { const name = prompt('輸入新討論區名稱:'); if(name) await createCategoryAction(name); }} className="text-blue-400 hover:text-blue-300"><PlusCircle size={16} /></button>}
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-shadow-glow">討論區選單 (Sectors)</h3>
+                {isAdmin && <button onClick={async () => { const name = prompt('輸入新討論區名稱:'); if(name) await createCategoryAction(name); }} className="text-blue-400 hover:text-blue-300 transition-all"><PlusCircle size={16} /></button>}
               </div>
               <div className="space-y-2">
                 {categories.map(cat => (
-                  <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all border ${selectedCategoryId === cat.id ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-900/20 translate-x-2' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
+                  <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all border ${selectedCategoryId === cat.id ? 'bg-blue-600 border-blue-500 shadow-lg translate-x-2' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
                     <div className="flex items-center gap-3">
                       <Hash size={14} className={selectedCategoryId === cat.id ? 'text-white' : 'text-slate-500'} />
                       <span className={`text-sm font-bold ${selectedCategoryId === cat.id ? 'text-white' : 'text-slate-400'}`}>{cat.name}</span>
@@ -239,13 +264,12 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
             </div>
           </div>
 
-          {/* 右側：主內容串流 */}
           <div className="lg:col-span-8 space-y-8">
             <div className="flex items-center gap-3 px-4">
-              <Activity size={16} className="text-emerald-400" />
-              <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Live Mission Stream / {categories.find(c => c.id === selectedCategoryId)?.name}</h2>
+              <Activity size={16} className="text-emerald-400 animate-pulse" />
+              <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">{categories.find(c => c.id === selectedCategoryId)?.name} / 即時串流</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
               <AnimatePresence mode="popLayout">
                 {filteredTasks.map((task, idx) => (
                   <motion.div layout key={task.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }} onClick={() => { setEditingTask(task); setIsSidebarOpen(true); setCurrentImgIdx(0); setIsEditMode(false); }} className="group cursor-pointer bg-white/[0.03] border border-white/5 hover:border-blue-500/40 p-6 rounded-[2.5rem] transition-all duration-500 hover:bg-white/[0.05] relative shadow-xl flex flex-col gap-5">
@@ -258,12 +282,12 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                     <div>
                       <div className="flex justify-between items-start mb-3 gap-4">
                         <h3 className="font-black text-2xl text-white tracking-tight leading-tight line-clamp-2">{task.title}</h3>
-                        <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5 flex-shrink-0">
+                        <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5 flex-shrink-0 shadow-sm">
                           <span className="text-[14px]">{task.author_avatar}</span>
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{task.author_name}</span>
                         </div>
                       </div>
-                      <p className="text-slate-500 text-sm line-clamp-3 font-mono leading-relaxed">{task.description || 'No additional briefing.'}</p>
+                      <p className="text-slate-500 text-sm line-clamp-3 font-mono leading-relaxed">{task.description || '無詳細說明資料。'}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -272,7 +296,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
           </div>
         </div>
 
-        {/* Details Modal */}
+        {/* 詳情視窗 */}
         <AnimatePresence>
           {editingTask && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-12 bg-slate-950/95 backdrop-blur-2xl overflow-y-auto">
@@ -283,7 +307,11 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                       <div className="w-full h-full relative flex items-center justify-center">
                         <motion.img key={currentImgIdx} src={editingTask.image_urls?.[currentImgIdx] || editingTask.image_url} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full h-full object-contain drop-shadow-2xl cursor-zoom-in" onClick={() => setFullscreenImage(editingTask.image_urls?.[currentImgIdx] || editingTask.image_url!)} />
                         {editingTask.image_urls && editingTask.image_urls.length > 1 && (
-                          <div className="absolute bottom-6 flex gap-2">{editingTask.image_urls.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === currentImgIdx ? 'bg-blue-500 w-6' : 'bg-white/20'}`} />)}</div>
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev > 0 ? prev - 1 : editingTask.image_urls!.length - 1)) }} className="absolute left-4 p-4 rounded-full bg-black/40 hover:bg-black/60 text-white transition-all"><ChevronLeft /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev < editingTask.image_urls!.length - 1 ? prev + 1 : 0)) }} className="absolute right-4 p-4 rounded-full bg-black/40 hover:bg-black/60 text-white transition-all"><ChevronRight /></button>
+                            <div className="absolute bottom-6 flex gap-2">{editingTask.image_urls.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === currentImgIdx ? 'bg-blue-500 w-6' : 'bg-white/20'}`} />)}</div>
+                          </>
                         )}
                       </div>
                     </motion.div>
@@ -292,17 +320,17 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
                 <div className={`p-10 md:p-20 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) ? 'md:w-1/2' : 'w-full'}`}>
                   <div className="flex justify-between items-center mb-16">
-                    <div className="flex items-center gap-4"><CheckCircle2 size={28} className="text-blue-500" /><h2 className="text-xs font-black text-slate-500 tracking-[0.4em] uppercase">Intelligence Detail</h2></div>
+                    <div className="flex items-center gap-4"><CheckCircle2 size={28} className="text-blue-500" /><h2 className="text-xs font-black text-slate-500 tracking-[0.4em] uppercase font-mono">INTELLIGENCE_DETAILS</h2></div>
                     <div className="flex items-center gap-5">
-                      {((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 bg-white/5 rounded-2xl text-blue-400 transition-all">{isSidebarOpen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}</button>}
-                      {(isAdmin || editingTask.author_name === currentUser) && <button onClick={() => setIsEditMode(!isEditMode)} className="p-3 bg-white/5 rounded-2xl text-emerald-400 transition-all">{isEditMode ? <Eye size={20} /> : <Edit3 size={20} />}</button>}
+                      {((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-blue-400">{isSidebarOpen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}</button>}
+                      {(isAdmin || editingTask.author_name === currentUser) && <button onClick={() => setIsEditMode(!isEditMode)} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-emerald-400">{isEditMode ? <Eye size={20} /> : <Edit3 size={20} />}</button>}
                       <button onClick={() => setEditingTask(null)} className="text-slate-600 hover:text-white transition-colors"><X size={36} /></button>
                     </div>
                   </div>
 
                   <div className="space-y-12 flex-1">
                     <div className="space-y-4">
-                      <div className="flex items-center gap-3 text-xs font-black text-blue-500/60 ml-1 italic">{editingTask.author_avatar} @{editingTask.author_name} / DEPLOY_OFFICER</div>
+                      <div className="flex items-center gap-3 text-xs font-black text-blue-500/60 ml-1 italic tracking-tighter">@{editingTask.author_name} / AUTH_USER</div>
                       <input id="edit-title" disabled={!isAdmin && editingTask.author_name !== currentUser} defaultValue={editingTask.title} className="w-full bg-transparent text-5xl font-black text-white outline-none border-b border-white/5 focus:border-blue-500 transition-all pb-4" />
                     </div>
                     <div className="space-y-8">
@@ -310,22 +338,43 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                     </div>
 
                     <div className="pt-16 border-t border-white/5 space-y-12">
-                      <div className="flex items-center gap-4"><MessageSquare size={22} className="text-blue-500" /><h3 className="text-sm font-black text-white uppercase tracking-[0.3em]">Comm Log (COMMS)</h3></div>
+                      <div className="flex items-center gap-4"><MessageSquare size={22} className="text-blue-500" /><h3 className="text-sm font-black text-white uppercase tracking-[0.3em]">通訊紀錄 (COMMS)</h3></div>
+                      
                       <div className="bg-white/[0.03] border border-white/5 p-8 rounded-[3rem] space-y-6 shadow-inner relative overflow-hidden">
-                        {replyTo && <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-2"><CornerDownRight size={12} /> Replying to {replyTo.author_name}</div>}
-                        <textarea id="comment-input" placeholder="Input update..." className="w-full bg-transparent outline-none text-sm font-mono leading-relaxed" rows={3} />
+                        {replyTo && <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-2"><CornerDownRight size={12} /> 正在回覆 {replyTo.author_name}</div>}
+                        <textarea id="comment-input" placeholder="輸入回應內容..." className="w-full bg-transparent outline-none text-sm font-mono leading-relaxed" rows={3} />
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {commentImagePreviews.map((url, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group/img">
+                              <img src={url} className="w-full h-full object-cover" />
+                              <button onClick={() => setCommentImagePreviews(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-black/50 rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity"><X size={10} /></button>
+                            </div>
+                          ))}
+                        </div>
+
                         <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                          <div className="relative cursor-pointer hover:text-white transition-colors"><input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageChange(e, true)} /><Paperclip size={18} className={commentImagePreviews.length > 0 ? 'text-emerald-400' : 'text-slate-500'} /></div>
-                          <div className="flex gap-4 items-center">{replyTo && <button onClick={() => setReplyTo(null)} className="text-[10px] text-red-400 font-black uppercase">Cancel</button>}<button onClick={handlePostComment} disabled={isCommentCompressing} className="bg-white text-black px-10 py-3 rounded-2xl text-xs font-black uppercase hover:bg-blue-500 hover:text-white transition-all shadow-lg">{isCommentCompressing ? '...' : 'SEND'}</button></div>
+                          <div className="relative cursor-pointer hover:text-white transition-colors">
+                            <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageChange(e, true)} />
+                            <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase group hover:text-blue-400">
+                              <Paperclip size={18} className={commentImagePreviews.length > 0 ? 'text-emerald-400' : ''} />
+                              <span className="hidden sm:inline">添加圖片 (Max 3)</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-4 items-center">
+                            {replyTo && <button onClick={() => setReplyTo(null)} className="text-[10px] text-red-400 font-black uppercase">取消</button>}
+                            <button onClick={handlePostComment} disabled={isCommentCompressing} className="bg-white text-black px-10 py-3 rounded-2xl text-xs font-black uppercase hover:bg-blue-500 hover:text-white transition-all shadow-lg">{isCommentCompressing ? '處理中' : '發送'}</button>
+                          </div>
                         </div>
                       </div>
+
                       <div className="space-y-8 pb-20">{renderComments(editingTask.comments || [])}</div>
                     </div>
                   </div>
 
-                  <div className="flex gap-5 mt-20">
+                  <div className="flex gap-5 mt-20 pb-10">
                     {(isAdmin || editingTask.author_name === currentUser) && (
-                      <><button onClick={async () => { await updateTaskAction(editingTask.id, (document.getElementById('edit-title') as HTMLInputElement).value, (document.getElementById('edit-desc') as HTMLTextAreaElement).value, editingTask.status); setEditingTask(null); }} className="flex-1 bg-white text-black py-6 rounded-[2rem] font-black hover:bg-blue-600 hover:text-white transition-all shadow-2xl">COMMIT UPDATE</button><button onClick={async () => { await deleteTaskAction(editingTask.id); setEditingTask(null); }} className="bg-red-500/10 text-red-500 px-12 py-6 rounded-[2rem] font-black border border-red-500/20 hover:bg-red-500 transition-all"><Trash2 size={24} /></button></>
+                      <><button onClick={async () => { await updateTaskAction(editingTask.id, (document.getElementById('edit-title') as HTMLInputElement).value, (document.getElementById('edit-desc') as HTMLTextAreaElement).value, editingTask.status); setEditingTask(null); }} className="flex-1 bg-white text-black py-6 rounded-[2rem] font-black shadow-2xl transition-all hover:bg-blue-600 hover:text-white">更新戰術目標</button><button onClick={async () => { if(confirm('確定刪除？')) await deleteTaskAction(editingTask.id); setEditingTask(null); }} className="bg-red-500/10 text-red-500 px-12 py-6 rounded-[2rem] font-black border border-red-500/20 hover:bg-red-500/20 transition-all"><Trash2 size={24} /></button></>
                     )}
                   </div>
                 </div>
