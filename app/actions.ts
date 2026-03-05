@@ -72,7 +72,7 @@ export async function addCommentAction(formData: FormData) {
 
   try {
     const imageUrls: string[] = [];
-    for (const file of imageFiles.slice(0, 3)) {
+    for (const file of imageFiles) {
       if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
         const blob = await put(file.name || 'comment.jpg', file, { access: 'public', addRandomSuffix: true });
         imageUrls.push(blob.url);
@@ -97,7 +97,34 @@ export async function deleteTaskAction(id: string) {
   revalidatePath('/');
 }
 
-export async function updateTaskAction(id: string, title: string, description: string, status: string) {
-  await sql`UPDATE tasks SET title = ${title}, description = ${description}, status = ${status} WHERE id = ${id}`;
-  revalidatePath('/');
+export async function updateTaskAction(formData: FormData) {
+  const id = formData.get('id') as string;
+  const title = formData.get('title') as string;
+  const description = formData.get('description') as string;
+  const status = formData.get('status') as string;
+  const existingImageUrls = formData.getAll('existing_image_urls') as string[];
+  const newImageFiles = formData.getAll('image') as any[];
+
+  try {
+    const imageUrls: string[] = [...existingImageUrls];
+    for (const file of newImageFiles) {
+      if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
+        const blob = await put(file.name || 'update.jpg', file, { access: 'public', addRandomSuffix: true });
+        imageUrls.push(blob.url);
+      }
+    }
+    const imageUrlsJson = JSON.stringify(imageUrls);
+
+    await sql`
+      UPDATE tasks 
+      SET title = ${title}, description = ${description}, status = ${status}, 
+          image_urls = ${imageUrlsJson}, image_url = ${imageUrls[0] || ''}
+      WHERE id = ${id}
+    `;
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
 }

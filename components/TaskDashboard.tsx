@@ -42,6 +42,11 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
   const [commentImagePreviews, setCommentImagePreviews] = useState<string[]>([]);
   const [commentCompressedFiles, setCommentCompressedFiles] = useState<File[]>([]);
   const [isCommentCompressing, setIsCommentCompressing] = useState(false);
+  
+  const [editingTaskImageUrls, setEditingTaskImageUrls] = useState<string[]>([]);
+  const [editingNewImagePreviews, setEditingNewImagePreviews] = useState<string[]>([]);
+  const [editingNewCompressedFiles, setEditingNewCompressedFiles] = useState<File[]>([]);
+
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -50,6 +55,14 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
       setSelectedCategoryId(workShowcase ? workShowcase.id : categories[0].id);
     }
   }, [categories, selectedCategoryId]);
+
+  useEffect(() => {
+    if (editingTask) {
+      setEditingTaskImageUrls(editingTask.image_urls || (editingTask.image_url ? [editingTask.image_url] : []));
+      setEditingNewImagePreviews([]);
+      setEditingNewCompressedFiles([]);
+    }
+  }, [editingTask]);
 
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
     initialTasks,
@@ -84,18 +97,49 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     setShowAuth(false);
   };
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>, isComment = false) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'create' | 'edit' | 'comment' = 'create') => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    if (isComment) setIsCommentCompressing(true); else setIsCompressing(true);
+    
+    if (type === 'comment') setIsCommentCompressing(true); else setIsCompressing(true);
+    
     try {
-      const results = await Promise.all(Array.from(files).slice(0, 3).map(async (file) => {
+      const results = await Promise.all(Array.from(files).map(async (file) => {
         const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1280 });
-        return { finalFile: new File([compressed], file.name, { type: file.type }), preview: await imageCompression.getDataUrlFromFile(compressed) };
+        return { 
+          finalFile: new File([compressed], file.name, { type: file.type }), 
+          preview: await imageCompression.getDataUrlFromFile(compressed) 
+        };
       }));
-      if (isComment) { setCommentCompressedFiles(results.map(r => r.finalFile)); setCommentImagePreviews(results.map(r => r.preview)); }
-      else { setCompressedFiles(results.map(r => r.finalFile)); setImagePreviews(results.map(r => r.preview)); }
-    } finally { setIsCommentCompressing(false); setIsCompressing(false); }
+
+      if (type === 'comment') {
+        setCommentCompressedFiles(prev => [...prev, ...results.map(r => r.finalFile)]);
+        setCommentImagePreviews(prev => [...prev, ...results.map(r => r.preview)]);
+      } else if (type === 'edit') {
+        setEditingNewCompressedFiles(prev => [...prev, ...results.map(r => r.finalFile)]);
+        setEditingNewImagePreviews(prev => [...prev, ...results.map(r => r.preview)]);
+      } else {
+        setCompressedFiles(prev => [...prev, ...results.map(r => r.finalFile)]);
+        setImagePreviews(prev => [...prev, ...results.map(r => r.preview)]);
+      }
+    } finally {
+      setIsCommentCompressing(false); 
+      setIsCompressing(false);
+      e.target.value = ''; // Reset input to allow same file selection
+    }
+  };
+
+  const handleRemoveImage = (index: number, type: 'create' | 'edit' | 'comment' = 'create') => {
+    if (type === 'comment') {
+      setCommentCompressedFiles(prev => prev.filter((_, i) => i !== index));
+      setCommentImagePreviews(prev => prev.filter((_, i) => i !== index));
+    } else if (type === 'edit') {
+      setEditingNewCompressedFiles(prev => prev.filter((_, i) => i !== index));
+      setEditingNewImagePreviews(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setCompressedFiles(prev => prev.filter((_, i) => i !== index));
+      setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -129,6 +173,25 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     setImagePreviews([]);
     setCompressedFiles([]);
     formRef.current?.reset();
+  };
+
+  const handleUpdateTask = async () => {
+    if (!editingTask) return;
+    const title = (document.getElementById('edit-title') as HTMLInputElement).value;
+    const description = (document.getElementById('edit-desc') as HTMLTextAreaElement).value;
+    
+    const formData = new FormData();
+    formData.append('id', editingTask.id);
+    formData.append('title', title);
+    formData.append('description', description);
+    formData.append('status', editingTask.status);
+    
+    editingTaskImageUrls.forEach(url => formData.append('existing_image_urls', url));
+    editingNewCompressedFiles.forEach(file => formData.append('image', file));
+
+    await updateTaskAction(formData);
+    setEditingTask(null);
+    setIsEditMode(false);
   };
 
   const handlePostComment = async () => {
@@ -235,11 +298,24 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                   <label className="text-[10px] font-black text-slate-500 tracking-widest px-2 uppercase">貼文內容 (Markdown)</label>
                   <textarea name="description" placeholder="輸入詳細內容..." rows={4} className="w-full bg-black/20 border border-white/10 rounded-2xl px-6 py-4 outline-none resize-none text-sm font-mono leading-relaxed focus:ring-2 focus:ring-blue-500/50 transition-all" />
                 </div>
+                
+                {imagePreviews.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {imagePreviews.map((url, i) => (
+                      <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group">
+                        <img src={url} className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => handleRemoveImage(i, 'create')} className="absolute top-1 right-1 p-1 bg-black/60 rounded-full text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="relative cursor-pointer bg-black/40 border border-white/10 rounded-2xl p-4 flex items-center justify-center gap-3 overflow-hidden group hover:bg-black/60 transition-all">
-                  <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageChange} />
-                  {imagePreviews.length > 0 && <img src={imagePreviews[0]} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-[1px]" />}
+                  <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleImageChange(e, 'create')} />
                   {isCompressing ? <Loader2 className="animate-spin text-blue-400" /> : <ImageIcon size={18} className={imagePreviews.length > 0 ? 'text-blue-400' : 'text-slate-600'} />}
-                  <span className="text-[10px] font-black uppercase text-slate-500 z-20">{isCompressing ? '優化中...' : (imagePreviews.length > 0 ? `已附加 ${imagePreviews.length} 張媒體` : '添加圖片')}</span>
+                  <span className="text-[10px] font-black uppercase text-slate-500 z-20">{isCompressing ? '優化中...' : '添加圖片'}</span>
                 </div>
                 <button type="submit" disabled={isPending || isCompressing} className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-3xl font-black shadow-xl transition-all active:scale-95">發布任務 (DEPLOY)</button>
               </form>
@@ -334,7 +410,33 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                       <input id="edit-title" disabled={!isAdmin && editingTask.author_name !== currentUser} defaultValue={editingTask.title} className="w-full bg-transparent text-5xl font-black text-white outline-none border-b border-white/5 focus:border-blue-500 transition-all pb-4" />
                     </div>
                     <div className="space-y-8">
-                      {isEditMode ? <textarea id="edit-desc" defaultValue={editingTask.description} rows={12} className="w-full bg-white/5 border border-white/10 rounded-[2.5rem] p-10 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" /> : <div className="prose prose-invert prose-sm max-w-none prose-blue font-sans bg-white/[0.02] p-10 rounded-[3rem] border border-white/5 shadow-inner overflow-x-hidden break-words cursor-pointer hover:bg-white/[0.04] transition-all" onClick={() => (isAdmin || editingTask.author_name === currentUser) && setIsEditMode(true)}><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || ''}</ReactMarkdown></div>}
+                      {isEditMode ? (
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-3 gap-4">
+                            {editingTaskImageUrls.map((url, i) => (
+                              <div key={`existing-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 group">
+                                <img src={url} className="w-full h-full object-cover" />
+                                <button onClick={() => setEditingTaskImageUrls(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                            {editingNewImagePreviews.map((url, i) => (
+                              <div key={`new-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-blue-500/30 group">
+                                <img src={url} className="w-full h-full object-cover" />
+                                <button onClick={() => handleRemoveImage(i, 'edit')} className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                            <div className="relative aspect-square rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center hover:bg-white/5 transition-all cursor-pointer">
+                              <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageChange(e, 'edit')} />
+                              <PlusCircle size={24} className="text-slate-600" />
+                            </div>
+                          </div>
+                          <textarea id="edit-desc" defaultValue={editingTask.description} rows={12} className="w-full bg-white/5 border border-white/10 rounded-[2.5rem] p-10 outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-300 font-mono text-sm leading-relaxed" />
+                        </div>
+                      ) : <div className="prose prose-invert prose-sm max-w-none prose-blue font-sans bg-white/[0.02] p-10 rounded-[3rem] border border-white/5 shadow-inner overflow-x-hidden break-words cursor-pointer hover:bg-white/[0.04] transition-all" onClick={() => (isAdmin || editingTask.author_name === currentUser) && setIsEditMode(true)}><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || ''}</ReactMarkdown></div>}
                     </div>
 
                     <div className="pt-16 border-t border-white/5 space-y-12">
@@ -355,10 +457,10 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
                         <div className="flex justify-between items-center pt-4 border-t border-white/5">
                           <div className="relative cursor-pointer hover:text-white transition-colors">
-                            <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageChange(e, true)} />
+                            <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageChange(e, 'comment')} />
                             <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase group hover:text-blue-400">
                               <Paperclip size={18} className={commentImagePreviews.length > 0 ? 'text-emerald-400' : ''} />
-                              <span className="hidden sm:inline">添加圖片 (Max 3)</span>
+                              <span className="hidden sm:inline">添加圖片</span>
                             </div>
                           </div>
                           <div className="flex gap-4 items-center">
@@ -374,7 +476,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
                   <div className="flex gap-5 mt-20 pb-10">
                     {(isAdmin || editingTask.author_name === currentUser) && (
-                      <><button onClick={async () => { await updateTaskAction(editingTask.id, (document.getElementById('edit-title') as HTMLInputElement).value, (document.getElementById('edit-desc') as HTMLTextAreaElement).value, editingTask.status); setEditingTask(null); }} className="flex-1 bg-white text-black py-6 rounded-[2rem] font-black shadow-2xl transition-all hover:bg-blue-600 hover:text-white">更新戰術目標</button><button onClick={async () => { if(confirm('確定刪除？')) await deleteTaskAction(editingTask.id); setEditingTask(null); }} className="bg-red-500/10 text-red-500 px-12 py-6 rounded-[2rem] font-black border border-red-500/20 hover:bg-red-500/20 transition-all"><Trash2 size={24} /></button></>
+                      <><button onClick={handleUpdateTask} className="flex-1 bg-white text-black py-6 rounded-[2rem] font-black shadow-2xl transition-all hover:bg-blue-600 hover:text-white">更新戰術目標</button><button onClick={async () => { if(confirm('確定刪除？')) await deleteTaskAction(editingTask.id); setEditingTask(null); }} className="bg-red-500/10 text-red-500 px-12 py-6 rounded-[2rem] font-black border border-red-500/20 hover:bg-red-500/20 transition-all"><Trash2 size={24} /></button></>
                     )}
                   </div>
                 </div>
