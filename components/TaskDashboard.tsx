@@ -271,14 +271,14 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
       <AnimatePresence>
         {showAuth && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900 border border-white/10 p-10 rounded-[3.5rem] w-full max-md shadow-2xl">
-              <h2 className="text-3xl font-black mb-8 italic text-center uppercase tracking-tighter">Initialize Access</h2>
-              <form onSubmit={handleAuth} className="space-y-6">
-                <div className="space-y-3">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-slate-900 border border-white/10 p-10 rounded-[3.5rem] w-full max-w-md shadow-2xl">
+              <h2 className="text-2xl font-black mb-8 italic text-center uppercase tracking-tighter">Initialize Access</h2>
+              <form onSubmit={handleAuth} className="space-y-8">
+                <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase text-center block">選擇頭像 (Select Avatar)</label>
-                  <div className="grid grid-cols-5 gap-3">
+                  <div className="grid grid-cols-5 gap-4">
                     {DEFAULT_AVATARS.map(emoji => (
-                      <button key={emoji} type="button" onClick={() => setCurrentAvatar(emoji)} className={`text-2xl p-2 rounded-xl transition-all ${currentAvatar === emoji ? 'bg-blue-600 scale-110 shadow-lg' : 'bg-white/5 hover:bg-white/10'}`}>{emoji}</button>
+                      <button key={emoji} type="button" onClick={() => setCurrentAvatar(emoji)} className={`text-2xl aspect-square flex items-center justify-center rounded-2xl transition-all ${currentAvatar === emoji ? 'bg-blue-600 scale-110 shadow-lg shadow-blue-500/20' : 'bg-white/5 hover:bg-white/10'}`}>{emoji}</button>
                     ))}
                   </div>
                   <input type="hidden" name="avatar" value={currentAvatar} />
@@ -452,7 +452,16 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
                   <div className="space-y-12 flex-1">
                     <div className="space-y-4">
-                      <div className="flex items-center gap-3 text-xs font-black text-blue-500/60 ml-1 italic tracking-tighter">@{editingTask.author_name} / AUTH_USER</div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3 text-xs font-black text-blue-500/60 ml-1 italic tracking-tighter">@{editingTask.author_name} / AUTH_USER</div>
+                        <button 
+                          onClick={() => handleToggleLike(editingTask.id, 'task')}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${editingTask.likes?.some((l: any) => l.name === currentUser) ? 'bg-pink-500/20 text-pink-500' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                        >
+                          <Heart size={16} fill={editingTask.likes?.some((l: any) => l.name === currentUser) ? 'currentColor' : 'none'} />
+                          <span className="text-xs font-black">{editingTask.likes?.length || 0}</span>
+                        </button>
+                      </div>
                       <input id="edit-title" disabled={!isAdmin && editingTask.author_name !== currentUser} defaultValue={editingTask.title} className="w-full bg-transparent text-5xl font-black text-white outline-none border-b border-white/5 focus:border-blue-500 transition-all pb-4" />
                     </div>
                     <div className="space-y-8">
