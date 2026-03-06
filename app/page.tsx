@@ -32,7 +32,14 @@ export default async function Home() {
         image_url: row.image_url || undefined,
         image_urls: urls,
         is_sent: Boolean(row.is_sent),
-        comments: commentRows.filter(c => String(c.task_id) === String(row.id))
+        likes: Array.isArray(row.likes) ? row.likes : [],
+        last_activity_at: row.last_activity_at,
+        comments: commentRows
+          .filter(c => String(c.task_id) === String(row.id))
+          .map(c => ({
+            ...c,
+            likes: Array.isArray(c.likes) ? c.likes : []
+          }))
       };
     });
   } catch (error) {
