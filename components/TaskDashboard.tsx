@@ -105,7 +105,16 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     
     try {
       const results = await Promise.all(Array.from(files).map(async (file) => {
-        const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1280 });
+        // 智慧壓縮邏輯：小於 0.5MB (512KB) 直接上傳原檔，確保文字清晰
+        if (file.size < 0.5 * 1024 * 1024) {
+          return {
+            finalFile: file,
+            preview: await imageCompression.getDataUrlFromFile(file)
+          };
+        }
+        
+        // 超過 0.5MB 才壓縮，目標 1MB, 解析度 1920px
+        const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1920 });
         return { 
           finalFile: new File([compressed], file.name, { type: file.type }), 
           preview: await imageCompression.getDataUrlFromFile(compressed) 
@@ -166,7 +175,8 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
       status: 'Pending', 
       is_sent: false, 
       image_url: imagePreviews[0] || undefined,
-      image_urls: imagePreviews
+      image_urls: imagePreviews,
+      last_activity_at: new Date().toISOString()
     });
 
     await formAction(formData);
@@ -214,7 +224,19 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
   const handleToggleLike = async (id: string | number, type: 'task' | 'comment') => {
     if (!currentUser) return;
-    await toggleLikeAction(id, type, { name: currentUser, avatar: currentAvatar });
+    const res = await toggleLikeAction(id, type, { name: currentUser, avatar: currentAvatar });
+    
+    // 如果伺服器端操作成功，且我們正在查看該貼文，手動同步詳情視窗的狀態
+    if (res.success && res.likes && editingTask) {
+      if (type === 'task' && editingTask.id === id) {
+        setEditingTask({ ...editingTask, likes: res.likes });
+      } else if (type === 'comment') {
+        const updatedComments = editingTask.comments?.map(c => 
+          c.id === id ? { ...c, likes: res.likes } : c
+        );
+        setEditingTask({ ...editingTask, comments: updatedComments });
+      }
+    }
   };
 
   const filteredTasks = optimisticTasks
