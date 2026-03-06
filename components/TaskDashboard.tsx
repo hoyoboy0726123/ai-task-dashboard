@@ -66,7 +66,10 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
     initialTasks,
-    (state, newTask: Task) => [newTask, ...state]
+    (state, action: any) => {
+      if (typeof action === 'function') return action(state);
+      return [action, ...state];
+    }
   );
 
   useEffect(() => {
@@ -165,7 +168,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     formData.delete('image');
     compressedFiles.forEach(file => formData.append('image', file));
 
-    addOptimisticTask({ 
+    const newTask: Task = { 
       id: Math.random().toString(), 
       title, 
       description, 
@@ -176,8 +179,11 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
       is_sent: false, 
       image_url: imagePreviews[0] || undefined,
       image_urls: imagePreviews,
-      last_activity_at: new Date().toISOString()
-    });
+      last_activity_at: new Date().toISOString(),
+      likes: []
+    };
+
+    addOptimisticTask(newTask);
 
     await formAction(formData);
     setImagePreviews([]);
@@ -216,7 +222,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     formData.append('parent_id', replyTo?.id || 'null');
     commentCompressedFiles.forEach(f => formData.append('comment_images', f));
 
-    const newComment = { id: Math.random().toString(), author_name: currentUser, author_avatar: currentAvatar, content, parent_id: replyTo?.id || null, image_urls: commentImagePreviews, created_at: new Date().toISOString() };
+    const newComment = { id: Math.random().toString(), author_name: currentUser, author_avatar: currentAvatar, content, parent_id: replyTo?.id || null, image_urls: commentImagePreviews, created_at: new Date().toISOString(), likes: [] };
     setEditingTask({ ...editingTask, comments: [...(editingTask.comments || []), newComment] });
     await addCommentAction(formData);
     input.value = ''; setReplyTo(null); setCommentImagePreviews([]); setCommentCompressedFiles([]);
@@ -226,15 +232,24 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     if (!currentUser) return;
     const res = await toggleLikeAction(id, type, { name: currentUser, avatar: currentAvatar });
     
-    // 如果伺服器端操作成功，且我們正在查看該貼文，手動同步詳情視窗的狀態
-    if (res.success && res.likes && editingTask) {
-      if (type === 'task' && editingTask.id === id) {
-        setEditingTask({ ...editingTask, likes: res.likes });
-      } else if (type === 'comment') {
-        const updatedComments = editingTask.comments?.map(c => 
-          c.id === id ? { ...c, likes: res.likes } : c
+    if (res.success && res.likes) {
+      // 1. 更新詳情視窗狀態
+      if (editingTask) {
+        if (type === 'task' && editingTask.id === id) {
+          setEditingTask({ ...editingTask, likes: res.likes });
+        } else if (type === 'comment') {
+          const updatedComments = editingTask.comments?.map(c => 
+            c.id === id ? { ...c, likes: res.likes } : c
+          );
+          setEditingTask({ ...editingTask, comments: updatedComments });
+        }
+      }
+      
+      // 2. 同步更新主頁面樂觀列表
+      if (type === 'task') {
+        addOptimisticTask((prevTasks: Task[]) => 
+          prevTasks.map(t => t.id === id ? { ...t, likes: res.likes, last_activity_at: new Date().toISOString() } : t)
         );
-        setEditingTask({ ...editingTask, comments: updatedComments });
       }
     }
   };
@@ -274,7 +289,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
             {c.likes && c.likes.length > 0 && (
               <div className="flex -space-x-2">
                 {c.likes.slice(0, 5).map((l: any, i: number) => (
-                  <div key={i} title={l.name} className="w-5 h-5 rounded-full bg-slate-800 border border-slate-900 flex items-center justify-center text-[10px] shadow-sm">{l.avatar}</div>
+                  <div key={i} title={l.name} className="w-5 h-5 rounded-full bg-slate-800 border border-slate-900 flex items-center justify-center text-[10px] shadow-sm cursor-help">{l.avatar}</div>
                 ))}
                 {c.likes.length > 5 && <div className="w-5 h-5 rounded-full bg-slate-700 border border-slate-900 flex items-center justify-center text-[8px] text-white">+{c.likes.length - 5}</div>}
               </div>
@@ -424,7 +439,7 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                         <div className="flex items-center gap-2">
                           <div className="flex -space-x-2">
                             {task.likes.slice(0, 3).map((l: any, i: number) => (
-                              <div key={i} title={l.name} className="w-6 h-6 rounded-full bg-slate-800 border-2 border-slate-950 flex items-center justify-center text-xs shadow-lg">{l.avatar}</div>
+                              <div key={i} title={l.name} className="w-6 h-6 rounded-full bg-slate-800 border-2 border-slate-950 flex items-center justify-center text-xs shadow-lg cursor-help">{l.avatar}</div>
                             ))}
                           </div>
                           <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">
