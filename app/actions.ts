@@ -6,7 +6,14 @@ import { put } from '@vercel/blob';
 import { sendTelegramNotification } from '@/lib/telegram';
 import { revalidatePath } from 'next/cache';
 
-export async function createTaskAction(prevState: any, formData: FormData) {
+export type ActionResult = {
+  success: boolean;
+  taskId?: string;
+  message?: string;
+  url?: string;
+};
+
+export async function createTaskAction(prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
   const authorName = formData.get('author_name') as string;
@@ -16,6 +23,7 @@ export async function createTaskAction(prevState: any, formData: FormData) {
 
   try {
     const imageUrls: string[] = [];
+    // 處理初始圖片 (如果有的話)
     for (const file of imageFiles) {
       if (file && typeof file === 'object' && 'size' in file && file.size > 0) {
         const blob = await put(file.name || 'upload.jpg', file, { access: 'public', addRandomSuffix: true });
@@ -24,15 +32,42 @@ export async function createTaskAction(prevState: any, formData: FormData) {
     }
     const imageUrlsJson = JSON.stringify(imageUrls);
 
-    await sql`
+    const result = await sql`
       INSERT INTO tasks (title, description, image_url, image_urls, author_name, author_avatar, category_id, status, is_sent, last_activity_at)
       VALUES (${title}, ${description || ''}, ${imageUrls[0] || ''}, ${imageUrlsJson}, ${authorName}, ${authorAvatar}, ${parseInt(categoryId)}, 'Pending', TRUE, CURRENT_TIMESTAMP)
+      RETURNING id
     `;
 
     revalidatePath('/');
-    return { success: true };
+    return { success: true, taskId: result.rows[0].id.toString() };
   } catch (error: any) {
     return { success: false, message: error.message };
+  }
+}
+
+// --- 單張圖片追加 (解決大檔案傳輸限制) ---
+export async function appendImageToTaskAction(taskId: string, file: File) {
+  try {
+    const blob = await put(file.name || 'append.jpg', file, { access: 'public', addRandomSuffix: true });
+    
+    // 獲取目前的圖片列表
+    const task = await sql`SELECT image_urls FROM tasks WHERE id = ${taskId}`;
+    let urls = task.rows[0]?.image_urls || [];
+    if (!Array.isArray(urls)) urls = [];
+    
+    urls.push(blob.url);
+    const urlsJson = JSON.stringify(urls);
+
+    await sql`
+      UPDATE tasks 
+      SET image_urls = ${urlsJson}, image_url = ${urls[0]} 
+      WHERE id = ${taskId}
+    `;
+    
+    revalidatePath('/');
+    return { success: true, url: blob.url };
+  } catch (e: any) {
+    return { success: false, message: e.message };
   }
 }
 

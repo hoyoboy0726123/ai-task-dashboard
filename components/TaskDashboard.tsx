@@ -2,7 +2,7 @@
 'use client';
 
 import { useActionState, useOptimistic, useState, useEffect, useRef } from 'react';
-import { createTaskAction, deleteTaskAction, updateTaskAction, addCommentAction, createCategoryAction, deleteCategoryAction, toggleLikeAction } from '@/app/actions';
+import { createTaskAction, deleteTaskAction, updateTaskAction, addCommentAction, createCategoryAction, deleteCategoryAction, toggleLikeAction, appendImageToTaskAction, type ActionResult } from '@/app/actions';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -23,7 +23,7 @@ export type Task = {
 const DEFAULT_AVATARS = ['👤', '🤖', '🦊', '🐱', '🐼', '🐲', '🚀', '⭐', '💎', '🔥'];
 
 export default function TaskDashboard({ initialTasks, categories }: { initialTasks: Task[], categories: any[] }) {
-  const [state, formAction, isPending] = useActionState(createTaskAction, { success: true });
+  const [state, formAction, isPending] = useActionState<ActionResult, FormData>(createTaskAction, { success: true });
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [currentAvatar, setCurrentAvatar] = useState('👤');
   const [showAuth, setShowAuth] = useState(false);
@@ -161,14 +161,15 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
     const description = formData.get('description') as string;
     if (!title || !selectedCategoryId) return;
 
-    formData.append('author_name', currentUser!);
-    formData.append('author_avatar', currentAvatar);
-    formData.append('category_id', selectedCategoryId.toString());
-    
-    formData.delete('image');
-    compressedFiles.forEach(file => formData.append('image', file));
+    // 關鍵修改：發布時先不帶圖片文件，避免 Payload 過大
+    const tempFormData = new FormData();
+    tempFormData.append('title', title);
+    tempFormData.append('description', description || '');
+    tempFormData.append('author_name', currentUser!);
+    tempFormData.append('author_avatar', currentAvatar);
+    tempFormData.append('category_id', selectedCategoryId.toString());
 
-    const newTask: Task = { 
+    addOptimisticTask({ 
       id: Math.random().toString(), 
       title, 
       description, 
@@ -181,11 +182,18 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
       image_urls: imagePreviews,
       last_activity_at: new Date().toISOString(),
       likes: []
-    };
+    });
 
-    addOptimisticTask(newTask);
+    // 1. 先建立貼文獲取 ID
+    const res = await createTaskAction(null, tempFormData);
+    
+    if (res.success && res.taskId && compressedFiles.length > 0) {
+      // 2. 序列化一張一張上傳圖片
+      for (const file of compressedFiles) {
+        await appendImageToTaskAction(res.taskId, file);
+      }
+    }
 
-    await formAction(formData);
     setImagePreviews([]);
     setCompressedFiles([]);
     formRef.current?.reset();
