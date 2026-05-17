@@ -9,7 +9,7 @@ export default async function Home() {
   let categories: any[] = [];
 
   try {
-    const { rows: catRows } = await sql`SELECT * FROM categories ORDER BY id ASC`;
+    const { rows: catRows } = await sql`SELECT * FROM categories ORDER BY id DESC`;
     categories = catRows;
 
     const { rows: taskRows } = await sql`SELECT * FROM tasks ORDER BY id DESC`;
