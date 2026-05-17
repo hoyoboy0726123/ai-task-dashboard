@@ -539,6 +539,13 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                       ) : <div className="prose prose-sm prose-neutral max-w-none font-sans bg-[#fbfaf7] p-10 rounded-[3rem] border border-black/[0.07] shadow-inner overflow-x-hidden break-words cursor-pointer hover:bg-[#f4f3ec] transition-all" onClick={() => (isAdmin || editingTask.author_name === currentUser) && setIsEditMode(true)}><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{editingTask.description || ''}</ReactMarkdown></div>}
                     </div>
 
+                    {(isAdmin || editingTask.author_name === currentUser) && (
+                      <div className="flex gap-5">
+                        <button onClick={handleUpdateTask} className="flex-1 bg-[#262625] text-white py-6 rounded-[2rem] font-black shadow-2xl transition-all hover:bg-[#d97757]">更新戰術目標</button>
+                        <button onClick={async () => { if(confirm('確定刪除？')) await deleteTaskAction(editingTask.id); setEditingTask(null); }} className="bg-red-500/10 text-red-500 px-12 py-6 rounded-[2rem] font-black border border-red-500/20 hover:bg-red-500/20 transition-all"><Trash2 size={24} /></button>
+                      </div>
+                    )}
+
                     <div className="pt-16 border-t border-black/[0.07] space-y-12">
                       <div className="flex items-center gap-4"><MessageSquare size={22} className="text-[#d97757]" /><h3 className="text-sm font-black text-[#262625] uppercase tracking-[0.3em]">通訊紀錄 (COMMS)</h3></div>
 
@@ -572,12 +579,6 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
 
                       <div className="space-y-8 pb-20">{renderComments(editingTask.comments || [])}</div>
                     </div>
-                  </div>
-
-                  <div className="flex gap-5 mt-20 pb-10">
-                    {(isAdmin || editingTask.author_name === currentUser) && (
-                      <><button onClick={handleUpdateTask} className="flex-1 bg-[#262625] text-white py-6 rounded-[2rem] font-black shadow-2xl transition-all hover:bg-[#d97757]">更新戰術目標</button><button onClick={async () => { if(confirm('確定刪除？')) await deleteTaskAction(editingTask.id); setEditingTask(null); }} className="bg-red-500/10 text-red-500 px-12 py-6 rounded-[2rem] font-black border border-red-500/20 hover:bg-red-500/20 transition-all"><Trash2 size={24} /></button></>
-                    )}
                   </div>
                 </div>
               </motion.div>
