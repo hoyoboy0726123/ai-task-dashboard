@@ -486,9 +486,9 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                 </AnimatePresence>
 
                 <div className={`p-10 md:p-20 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) ? 'md:w-1/2' : 'w-full'}`}>
-                  <div className="flex justify-between items-center mb-16">
-                    <div className="flex items-center gap-4"><CheckCircle2 size={28} className="text-[#d97757]" /><h2 className="text-xs font-black text-[#91918a] tracking-[0.4em] uppercase font-mono">INTELLIGENCE_DETAILS</h2></div>
-                    <div className="flex items-center gap-5">
+                  <div className="flex justify-between items-center gap-3 mb-16">
+                    <div className="flex items-center gap-4 min-w-0"><CheckCircle2 size={28} className="text-[#d97757] shrink-0" /><h2 className="text-xs font-black text-[#91918a] tracking-[0.4em] uppercase font-mono truncate">INTELLIGENCE_DETAILS</h2></div>
+                    <div className="flex items-center gap-5 shrink-0">
                       {((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 bg-[#f4f3ec] hover:bg-[#ecebe2] rounded-2xl text-[#d97757]">{isSidebarOpen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}</button>}
                       {(isAdmin || editingTask.author_name === currentUser) && <button onClick={() => setIsEditMode(!isEditMode)} className="p-3 bg-[#f4f3ec] hover:bg-[#ecebe2] rounded-2xl text-emerald-600">{isEditMode ? <Eye size={20} /> : <Edit3 size={20} />}</button>}
                       <button onClick={() => setEditingTask(null)} className="text-[#a3a299] hover:text-[#262625] transition-colors"><X size={36} /></button>
