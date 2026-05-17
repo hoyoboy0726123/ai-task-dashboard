@@ -509,6 +509,21 @@ export default function TaskDashboard({ initialTasks, categories }: { initialTas
                       </div>
                       <input id="edit-title" disabled={!isAdmin && editingTask.author_name !== currentUser} defaultValue={editingTask.title} className="w-full bg-transparent text-5xl font-black text-[#262625] outline-none border-b border-black/10 focus:border-[#d97757] transition-all pb-4" />
                     </div>
+
+                    {/* 全寬模式 (側欄收起時) 內嵌顯示圖片,標題下方、內文上方 */}
+                    {!isSidebarOpen && ((editingTask.image_urls && editingTask.image_urls.length > 0) || editingTask.image_url) && (
+                      <div className="group relative w-full rounded-[2.5rem] overflow-hidden border border-black/[0.07] bg-[#f4f3ec] flex items-center justify-center">
+                        <motion.img key={currentImgIdx} src={editingTask.image_urls?.[currentImgIdx] || editingTask.image_url} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-h-[460px] object-contain cursor-zoom-in" onClick={() => setFullscreenImage(editingTask.image_urls?.[currentImgIdx] || editingTask.image_url!)} />
+                        {editingTask.image_urls && editingTask.image_urls.length > 1 && (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev > 0 ? prev - 1 : editingTask.image_urls!.length - 1)) }} className="absolute left-4 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white transition-all opacity-0 group-hover:opacity-100"><ChevronLeft /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setCurrentImgIdx(prev => (prev < editingTask.image_urls!.length - 1 ? prev + 1 : 0)) }} className="absolute right-4 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white transition-all opacity-0 group-hover:opacity-100"><ChevronRight /></button>
+                            <div className="absolute bottom-5 flex gap-2">{editingTask.image_urls.map((_, i) => <div key={i} className={`h-2 rounded-full transition-all ${i === currentImgIdx ? 'bg-[#d97757] w-6' : 'bg-black/20 w-2'}`} />)}</div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     <div className="space-y-8">
                       {isEditMode ? (
                         <div className="space-y-6">
